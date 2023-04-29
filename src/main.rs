@@ -4,6 +4,8 @@ mod prelude;
 mod state;
 use game::GamePlugins;
 
+#[macro_use]
+extern crate lazy_static;
 use crate::prelude::*;
 
 fn main() {

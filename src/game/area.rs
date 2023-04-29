@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub struct Follower {
     pub sign_holder: bool,
     pub corrupted: bool,
-    pub affinity: PlayerId,
+    pub affinity: Option<PlayerId>,
     pub power: u32,
 }
 
@@ -53,7 +53,7 @@ impl WorldArea {
             .iter()
             .filter(|a| a.id.player == player_turn.player_id)
             .enumerate()
-            .filter(|(idx, a)| player_turn.is_unassigned_player_agent(a.id))
+            .filter(|(_, a)| player_turn.is_unassigned_player_agent(a.id))
             .map(|(idx, _)| idx)
             .next()
     }
@@ -61,14 +61,14 @@ impl WorldArea {
     pub fn get_player_followers(&self, player: PlayerId) -> u32 {
         self.followers
             .iter()
-            .filter(|f| f.affinity == player)
+            .filter(|f| f.affinity == Some(player))
             .count() as u32
     }
 
     pub fn get_player_power(&self, player: PlayerId) -> u32 {
         self.followers
             .iter()
-            .filter(|f| f.affinity == player)
+            .filter(|f| f.affinity == Some(player))
             .map(|f| f.power)
             .sum()
     }
@@ -76,7 +76,7 @@ impl WorldArea {
     pub fn get_player_corrupted(&self, player: PlayerId) -> u32 {
         self.followers
             .iter()
-            .filter(|f| f.affinity == player && f.corrupted)
+            .filter(|f| f.affinity == Some(player) && f.corrupted)
             .count() as u32
     }
 }

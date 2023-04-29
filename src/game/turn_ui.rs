@@ -2,28 +2,22 @@ use bevy::utils::HashMap;
 
 use crate::prelude::*;
 
-pub struct TurnPlugin;
+pub struct TurnUiPlugin;
 
-impl Plugin for TurnPlugin {
+impl Plugin for TurnUiPlugin {
     fn build(&self, app: &mut App) {
-        let mut debug_turn_report = TurnReport::default();
-        debug_turn_report.events.push(TurnReportEvent::AgentAction {
-            location: (0, 0),
-            location_name: "Waterdeep".to_string(),
-            agent_name: "Jarnothan".to_string(),
-            action: AgentAction::Brutalize,
-            success_amount: 0,
-            fail_amount: 0,
-        });
-        debug_turn_report.event_id = Some(0);
-
         app.insert_resource(PlayerTurn::new(PlayerId(0), 5))
             .insert_resource(PlayerId(0))
-            // .init_resource::<TurnReport>()
-            .insert_resource(debug_turn_report)
+            .init_resource::<TurnReport>()
+            .add_system(update_end_turn_button.run_if(in_state(GameState::Playing)))
+            .add_system(evoke_darkness_on_click.run_if(in_state(GameState::Playing)))
+            .add_system(review_turn_on_click.run_if(in_state(GameState::Playing)))
+            .add_system(update_review_turn_button.run_if(in_state(GameState::Playing)))
             .add_system(add_turn_end_button.in_schedule(OnEnter(GameState::Playing)))
+            .add_system(add_review_button.in_schedule(OnEnter(GameState::Playing)))
             .add_system(add_turn_report_ui.in_schedule(OnEnter(GameState::Playing)))
-            .add_system(view_turn_report.run_if(in_state(GameState::Playing)));
+            .add_system(view_turn_report.run_if(in_state(GameState::Playing)))
+            .add_system(hide_turn_report.run_if(in_state(GameState::Playing)));
     }
 }
 
@@ -208,6 +202,21 @@ pub struct TurnReport {
     pub rendered_event_id: Option<usize>,
 }
 
+fn hide_turn_report(
+    turn_report: Res<TurnReport>,
+    mut report_query: Query<&mut Visibility, With<TurnReportUi>>,
+) {
+    if turn_report.event_id.is_none() {
+        for mut visibility in report_query.iter_mut() {
+            *visibility = Visibility::Hidden;
+        }
+    } else {
+        for mut visibility in report_query.iter_mut() {
+            *visibility = Visibility::Visible;
+        }
+    }
+}
+
 fn view_turn_report(
     mut turn_report: ResMut<TurnReport>,
     keyboard: Res<Input<KeyCode>>,
@@ -218,9 +227,15 @@ fn view_turn_report(
         if keyboard.just_pressed(KeyCode::Space) {
             // Advance the turn report.
             event_id = event_id + 1;
+            println!("Advancing turn report.");
         } else if keyboard.just_pressed(KeyCode::Back) && event_id > 0 {
             // Go back in the turn report.
             event_id = event_id - 1;
+            println!("Going back in turn report.");
+        } else if keyboard.just_pressed(KeyCode::Escape) {
+            // Close the turn report.
+            println!("Closing turn report.");
+            turn_report.event_id = None;
         }
         if event_id >= turn_report.events.len() {
             turn_report.event_id = None;
@@ -256,66 +271,83 @@ fn view_turn_report(
     }
 }
 
-#[derive(Resource, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlayerTurn {
-    pub player_id: PlayerId,
-    pub actions: HashMap<AgentId, AgentAction>,
+fn update_end_turn_button(
+    player_turn: Res<PlayerTurn>,
+    mut button_query: Query<(&Name, &mut Visibility)>,
+) {
+    if player_turn.get_unassigned_agents() > 0 {
+        button_query.iter_mut().for_each(|(name, mut visibility)| {
+            if name.eq_ignore_ascii_case("Evoke Darkness") {
+                *visibility = Visibility::Hidden;
+            } else if name.eq_ignore_ascii_case("Evoke Darkness Inactive") {
+                *visibility = Visibility::Visible;
+            }
+        });
+    } else {
+        button_query.iter_mut().for_each(|(name, mut visibility)| {
+            if name.eq_ignore_ascii_case("Evoke Darkness") {
+                *visibility = Visibility::Visible;
+            } else if name.eq_ignore_ascii_case("Evoke Darkness Inactive") {
+                *visibility = Visibility::Hidden;
+            }
+        });
+    }
 }
 
-impl PlayerTurn {
-    pub fn new(player_id: PlayerId, agent_count: u32) -> Self {
-        let mut actions = HashMap::default();
-        for i in 0..agent_count {
-            actions.insert(
-                AgentId {
-                    player: player_id,
-                    agent: i,
-                },
-                AgentAction::None,
-            );
-        }
-        Self { player_id, actions }
-    }
-
-    pub fn set_action(&mut self, agent_id: AgentId, action: AgentAction) {
-        self.actions.insert(agent_id, action);
-    }
-
-    pub fn get_action(&self, agent_id: AgentId) -> Option<AgentAction> {
-        self.actions.get(&agent_id).copied()
-    }
-
-    pub fn is_unassigned_player_agent(&self, agent_id: AgentId) -> bool {
-        if agent_id.player != self.player_id {
-            return false;
-        }
-        if let Some(action) = self.actions.get(&agent_id) {
-            if let AgentAction::None = action {
-                return true;
+fn update_review_turn_button(
+    turn_report: Res<TurnReport>,
+    mut button_query: Query<(&Name, &mut Visibility)>,
+) {
+    if turn_report.event_id.is_none() && turn_report.events.len() > 0 {
+        button_query.iter_mut().for_each(|(name, mut visibility)| {
+            if name.eq_ignore_ascii_case("Review Turn") {
+                *visibility = Visibility::Visible;
             }
-        }
-        false
-    }
-
-    pub fn get_unassigned_agents(&self) -> i32 {
-        let mut unassigned_agents = 0;
-        for (_, action) in self.actions.iter() {
-            if let AgentAction::None = action {
-                unassigned_agents += 1;
+        });
+    } else {
+        button_query.iter_mut().for_each(|(name, mut visibility)| {
+            if name.eq_ignore_ascii_case("Review Turn") {
+                *visibility = Visibility::Hidden;
             }
-        }
-        unassigned_agents
-    }
-
-    pub fn get_unassigned_agent(&self) -> AgentId {
-        for (agent_id, action) in self.actions.iter() {
-            if let AgentAction::None = action {
-                return *agent_id;
-            }
-        }
-        panic!("No unassigned agents");
+        });
     }
 }
+
+fn evoke_darkness_on_click(
+    mut evoking_state: ResMut<EvokingState>,
+    player_turn: Res<PlayerTurn>,
+    mut interaction_query: Query<
+        &Interaction,
+        (
+            Changed<Interaction>,
+            With<Button>,
+            With<EvokeDarknessButton>,
+        ),
+    >,
+) {
+    if let Some(interaction) = interaction_query.iter_mut().next() {
+        if *interaction == Interaction::Clicked {
+            evoking_state.begin(player_turn.clone());
+        }
+    }
+}
+
+fn review_turn_on_click(
+    mut turn_report: ResMut<TurnReport>,
+    mut interaction_query: Query<
+        &Interaction,
+        (Changed<Interaction>, With<Button>, With<ReviewTurnButton>),
+    >,
+) {
+    if let Some(interaction) = interaction_query.iter_mut().next() {
+        if *interaction == Interaction::Clicked {
+            turn_report.event_id = Some(0);
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct TurnReportUi;
 
 fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
     // Center me.
@@ -336,6 +368,7 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                 },
                 ..default()
             },
+            TurnReportUi,
             RelativeCursorPosition::default(),
         ))
         .with_children(|parent| {
@@ -404,7 +437,7 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                                 ..default()
                             },
                             text: Text::from_section(
-                                "Previous Report: Backspace",
+                                "Previous: Backspace",
                                 TextStyle {
                                     font: assets.font.clone(),
                                     font_size: FONT_SIZE,
@@ -414,6 +447,29 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                             ..default()
                         },
                         Name::new("turn_report_back"),
+                    ));
+                    // Helper - Exit
+                    parent.spawn((
+                        TextBundle {
+                            style: Style {
+                                position_type: PositionType::Absolute,
+                                position: UiRect {
+                                    bottom: Val::Px(ONE_UNIT),
+                                    ..default()
+                                },
+                                ..default()
+                            },
+                            text: Text::from_section(
+                                "Exit: ESC",
+                                TextStyle {
+                                    font: assets.font.clone(),
+                                    font_size: FONT_SIZE,
+                                    color: Color::WHITE,
+                                },
+                            ),
+                            ..default()
+                        },
+                        Name::new("turn_report_esc"),
                     ));
                     // Helper - Forward
                     parent.spawn((
@@ -428,7 +484,7 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                                 ..default()
                             },
                             text: Text::from_section(
-                                "Next Report: Space",
+                                "Next: Space",
                                 TextStyle {
                                     font: assets.font.clone(),
                                     font_size: FONT_SIZE,
@@ -442,6 +498,9 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                 });
         });
 }
+
+#[derive(Component)]
+struct EvokeDarknessButton;
 
 fn add_turn_end_button(mut commands: Commands, assets: Res<MyAssets>) {
     // Evoke darkness.
@@ -458,29 +517,113 @@ fn add_turn_end_button(mut commands: Commands, assets: Res<MyAssets>) {
                     },
                     ..default()
                 },
+                background_color: Color::WHITE.into(),
+                ..default()
+            },
+            EvokeDarknessButton,
+            RelativeCursorPosition::default(),
+            Name::new("Evoke Darkness"),
+        ))
+        .with_children(|parent| {
+            parent.spawn((TextBundle {
+                style: Style {
+                    flex_shrink: 1.,
+                    ..default()
+                },
+                text: Text::from_section(
+                    "Evoke Darkness",
+                    TextStyle {
+                        font: assets.font.clone(),
+                        font_size: 32.,
+                        color: Color::BLACK,
+                    },
+                ),
+                background_color: Color::rgb(0.8, 0., 0.9).into(),
+                ..default()
+            },));
+        });
+    // Evoke darkness - Inactive.
+    commands
+        .spawn((
+            ButtonBundle {
+                style: Style {
+                    border: UiRect::all(Val::Px(ONE_UNIT)),
+                    position_type: PositionType::Absolute,
+                    position: UiRect {
+                        bottom: Val::Px(ONE_UNIT),
+                        right: Val::Px(ONE_UNIT),
+                        ..default()
+                    },
+                    ..default()
+                },
+                background_color: Color::BLACK.into(),
                 ..default()
             },
             RelativeCursorPosition::default(),
+            SimpleTooltip::new("Assign all agents before ending turn."),
+            Name::new("Evoke Darkness Inactive"),
         ))
         .with_children(|parent| {
-            parent.spawn((
-                TextBundle {
-                    style: Style {
-                        flex_shrink: 1.,
-                        ..default()
-                    },
-                    text: Text::from_section(
-                        "Evoke Darkness",
-                        TextStyle {
-                            font: assets.font.clone(),
-                            font_size: 32.,
-                            color: Color::BLACK,
-                        },
-                    ),
-                    background_color: Color::rgb(0.8, 0., 0.9).into(),
+            parent.spawn((TextBundle {
+                style: Style {
+                    flex_shrink: 1.,
                     ..default()
                 },
-                Name::new("Evoke Darkness"),
-            ));
+                text: Text::from_section(
+                    "Evoke Darkness",
+                    TextStyle {
+                        font: assets.font.clone(),
+                        font_size: 32.,
+                        color: Color::BLACK,
+                    },
+                ),
+                background_color: Color::rgba(0.8, 0., 0.9, 0.5).into(),
+                ..default()
+            },));
+        });
+}
+
+#[derive(Component)]
+struct ReviewTurnButton;
+
+fn add_review_button(mut commands: Commands, assets: Res<MyAssets>) {
+    // Review turn.
+    commands
+        .spawn((
+            ButtonBundle {
+                style: Style {
+                    border: UiRect::all(Val::Px(ONE_UNIT)),
+                    position_type: PositionType::Absolute,
+                    position: UiRect {
+                        bottom: Val::Px(ONE_UNIT),
+                        left: Val::Px(ONE_UNIT),
+                        ..default()
+                    },
+                    ..default()
+                },
+                background_color: Color::WHITE.into(),
+                ..default()
+            },
+            ReviewTurnButton,
+            RelativeCursorPosition::default(),
+            Name::new("Review Turn"),
+        ))
+        .with_children(|parent| {
+            parent.spawn((TextBundle {
+                style: Style {
+                    flex_shrink: 1.,
+                    ..default()
+                },
+                text: Text::from_section(
+                    "Review The Evoking",
+                    TextStyle {
+                        font: assets.font.clone(),
+                        font_size: 32.,
+                        color: Color::BLACK,
+                    },
+                ),
+                background_color: Color::rgb(0.8, 0., 0.9).into(),
+                ..default()
+            },));
         });
 }

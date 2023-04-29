@@ -26,7 +26,7 @@ impl AgentAction {
                 "Prostelytize to the locals, hoping to gain new followers".to_string()
             }
             AgentAction::Brutalize => {
-                "Brutalize the locals, scaring away all but your loyal followers".to_string()
+                "Brutalize the locals, scaring away the weak and attracting the strong".to_string()
             }
             AgentAction::Corrupt => {
                 "Attempt to corrupt a follower, gaining access to greater power".to_string()
