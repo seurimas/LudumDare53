@@ -10,7 +10,8 @@ impl Plugin for UiPlugin {
     }
 }
 
-const ONE_UNIT: f32 = 4.;
+pub const ONE_UNIT: f32 = 4.;
+pub const FONT_SIZE: f32 = 20.;
 
 fn spawn_stat_block(parent: &mut ChildBuilder, font: Handle<Font>, name: &'static str) {
     parent
@@ -37,7 +38,7 @@ fn spawn_stat_block(parent: &mut ChildBuilder, font: Handle<Font>, name: &'stati
                     name,
                     TextStyle {
                         font: font.clone(),
-                        font_size: 14.,
+                        font_size: FONT_SIZE,
                         color: Color::BLACK,
                     },
                 ),
@@ -54,7 +55,7 @@ fn spawn_stat_block(parent: &mut ChildBuilder, font: Handle<Font>, name: &'stati
                         "0",
                         TextStyle {
                             font: font.clone(),
-                            font_size: 14.,
+                            font_size: FONT_SIZE,
                             color: Color::WHITE,
                         },
                     ),
@@ -86,7 +87,7 @@ fn spawn_stat_ui(parent: &mut ChildBuilder, font: Handle<Font>) {
         });
 }
 
-fn spawn_area_label(parent: &mut ChildBuilder, font: Handle<Font>, name: &'static str) {
+fn spawn_labeled_value(parent: &mut ChildBuilder, font: Handle<Font>, name: &'static str) {
     parent
         .spawn(NodeBundle {
             style: Style {
@@ -108,7 +109,7 @@ fn spawn_area_label(parent: &mut ChildBuilder, font: Handle<Font>, name: &'stati
                     name,
                     TextStyle {
                         font: font.clone(),
-                        font_size: 14.,
+                        font_size: FONT_SIZE,
                         color: Color::BLACK,
                     },
                 ),
@@ -121,10 +122,10 @@ fn spawn_area_label(parent: &mut ChildBuilder, font: Handle<Font>, name: &'stati
                         ..default()
                     },
                     text: Text::from_section(
-                        "0",
+                        "?",
                         TextStyle {
                             font: font.clone(),
-                            font_size: 14.,
+                            font_size: FONT_SIZE,
                             color: Color::BLACK,
                         },
                     ),
@@ -135,21 +136,130 @@ fn spawn_area_label(parent: &mut ChildBuilder, font: Handle<Font>, name: &'stati
         });
 }
 
-fn spawn_area_ui(parent: &mut ChildBuilder, font: Handle<Font>) {
-    parent
-        .spawn(NodeBundle {
+#[derive(Component)]
+pub struct ActiveInactiveImages {
+    pub active: Handle<Image>,
+    pub inactive: Handle<Image>,
+}
+
+fn spawn_agent_action_button(
+    parent: &mut ChildBuilder,
+    active_action_button: Handle<Image>,
+    inactive_action_button: Handle<Image>,
+    agent_action: AgentAction,
+) {
+    let images = ActiveInactiveImages {
+        active: active_action_button,
+        inactive: inactive_action_button.clone(),
+    };
+    parent.spawn((
+        ButtonBundle {
             style: Style {
                 border: UiRect::all(Val::Px(ONE_UNIT)),
-                flex_direction: FlexDirection::Column,
+                size: Size::new(Val::Px(64.), Val::Px(64.)),
+                ..Default::default()
+            },
+            image: inactive_action_button.into(),
+            ..Default::default()
+        },
+        agent_action,
+        RelativeCursorPosition::default(),
+        images,
+    ));
+}
+
+fn spawn_agent_section(
+    parent: &mut ChildBuilder,
+    font: Handle<Font>,
+    action_buttons: HashMap<String, Handle<Image>>,
+) {
+    parent
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    border: UiRect::all(Val::Px(ONE_UNIT)),
+                    flex_direction: FlexDirection::Column,
+                    ..default()
+                },
                 ..default()
             },
-            ..default()
-        })
+            Name::new("Area Agent"),
+        ))
         .with_children(|parent| {
-            spawn_area_label(parent, font.clone(), "Area Name");
-            spawn_area_label(parent, font.clone(), "Followers");
-            spawn_area_label(parent, font.clone(), "Power");
-            spawn_area_label(parent, font.clone(), "Corrupted");
+            spawn_labeled_value(parent, font.clone(), "Agent");
+            spawn_labeled_value(parent, font.clone(), "Agent Power");
+            spawn_labeled_value(parent, font.clone(), "Agent Stamina");
+            spawn_labeled_value(parent, font.clone(), "Corrupted?");
+            parent
+                .spawn((
+                    NodeBundle {
+                        style: Style {
+                            border: UiRect::all(Val::Px(ONE_UNIT)),
+                            flex_direction: FlexDirection::Row,
+                            justify_content: JustifyContent::FlexStart,
+                            flex_wrap: FlexWrap::Wrap,
+                            gap: Size::all(Val::Px(ONE_UNIT)),
+                            size: Size::width(Val::Px(128. + ONE_UNIT * 4.)),
+                            ..default()
+                        },
+                        background_color: Color::RED.into(),
+                        ..default()
+                    },
+                    Name::new("agent_actions"),
+                ))
+                .with_children(|parent| {
+                    spawn_agent_action_button(
+                        parent,
+                        action_buttons["MoveActive.png"].clone(),
+                        action_buttons["Move.png"].clone(),
+                        AgentAction::Move(0),
+                    );
+                    spawn_agent_action_button(
+                        parent,
+                        action_buttons["MoveActive.png"].clone(),
+                        action_buttons["Move.png"].clone(),
+                        AgentAction::Move(1),
+                    );
+                    spawn_agent_action_button(
+                        parent,
+                        action_buttons["MoveActive.png"].clone(),
+                        action_buttons["Move.png"].clone(),
+                        AgentAction::Move(2),
+                    );
+                    spawn_agent_action_button(
+                        parent,
+                        action_buttons["ProstelytizeActive.png"].clone(),
+                        action_buttons["Prostelytize.png"].clone(),
+                        AgentAction::Prostelytize,
+                    );
+                });
+        });
+}
+
+fn spawn_area_ui(
+    parent: &mut ChildBuilder,
+    font: Handle<Font>,
+    action_buttons: HashMap<String, Handle<Image>>,
+) {
+    parent
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    border: UiRect::all(Val::Px(ONE_UNIT)),
+                    flex_direction: FlexDirection::Column,
+                    ..default()
+                },
+                ..default()
+            },
+            RelativeCursorPosition::default(),
+            Name::new("area_ui"),
+        ))
+        .with_children(|parent| {
+            spawn_labeled_value(parent, font.clone(), "Area Name");
+            spawn_labeled_value(parent, font.clone(), "Area Followers");
+            spawn_labeled_value(parent, font.clone(), "Area Power");
+            spawn_labeled_value(parent, font.clone(), "Area Corrupted");
+            spawn_agent_section(parent, font.clone(), action_buttons);
         });
 }
 
@@ -168,8 +278,9 @@ fn gameplay_ui(mut commands: Commands, assets: Res<MyAssets>) {
         })
         .with_children(|parent| {
             spawn_stat_ui(parent, assets.font.clone());
-            spawn_area_ui(parent, assets.font.clone());
+            spawn_area_ui(parent, assets.font.clone(), assets.action_buttons.clone());
         });
+
     // Tooltip.
     commands
         .spawn((
@@ -202,7 +313,7 @@ fn gameplay_ui(mut commands: Commands, assets: Res<MyAssets>) {
                         "Tooltip",
                         TextStyle {
                             font: assets.font.clone(),
-                            font_size: 14.,
+                            font_size: FONT_SIZE,
                             color: Color::BLACK,
                         },
                     ),

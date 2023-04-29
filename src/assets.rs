@@ -23,4 +23,14 @@ pub struct MyAssets {
     pub tile_hover: Handle<AudioSource>,
     #[asset(path = "tile_click.wav")]
     pub tile_click: Handle<AudioSource>,
+    #[asset(
+        paths(
+            "Move.png",
+            "MoveActive.png",
+            "Prostelytize.png",
+            "ProstelytizeActive.png"
+        ),
+        collection(typed, mapped)
+    )]
+    pub action_buttons: HashMap<String, Handle<Image>>,
 }
