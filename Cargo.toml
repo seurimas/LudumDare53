@@ -1,5 +1,5 @@
 [package]
-name = "LudumDare53"
+name = "ludum_dare_53"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 bevy = "0.10"
+bevy_asset_loader = { version = "0.16", features = ["2d"] }
 rand = "0.8.0"
 rand_pcg = "0.3.1"
 serde = { version = "1", features = ["derive"] }
