@@ -6,14 +6,16 @@ pub struct TurnUiPlugin;
 
 impl Plugin for TurnUiPlugin {
     fn build(&self, app: &mut App) {
+        let mut debug_players = HashMap::default();
+        debug_players.insert(PlayerId(0), "Player 1".to_string());
         app.insert_resource(PlayerTurn::new(PlayerId(0), 5))
             .insert_resource(PlayerId(0))
+            .insert_resource(GamePlayers(debug_players))
+            .insert_resource(Season(0))
             .init_resource::<TurnReport>()
             .add_system(update_end_turn_button.run_if(in_state(GameState::Playing)))
-            .add_system(evoke_darkness_on_click.run_if(in_state(GameState::Playing)))
             .add_system(review_turn_on_click.run_if(in_state(GameState::Playing)))
             .add_system(update_review_turn_button.run_if(in_state(GameState::Playing)))
-            .add_system(add_turn_end_button.in_schedule(OnEnter(GameState::Playing)))
             .add_system(add_review_button.in_schedule(OnEnter(GameState::Playing)))
             .add_system(add_turn_report_ui.in_schedule(OnEnter(GameState::Playing)))
             .add_system(view_turn_report.run_if(in_state(GameState::Playing)))
@@ -202,6 +204,16 @@ pub struct TurnReport {
     pub rendered_event_id: Option<usize>,
 }
 
+impl TurnReport {
+    pub fn new(events: Vec<TurnReportEvent>) -> Self {
+        Self {
+            events,
+            event_id: Some(0),
+            rendered_event_id: None,
+        }
+    }
+}
+
 fn hide_turn_report(
     turn_report: Res<TurnReport>,
     mut report_query: Query<&mut Visibility, With<TurnReportUi>>,
@@ -227,16 +239,17 @@ fn view_turn_report(
         if keyboard.just_pressed(KeyCode::Space) {
             // Advance the turn report.
             event_id = event_id + 1;
-            println!("Advancing turn report.");
+            println!("Advancing turn report to {}.", event_id);
         } else if keyboard.just_pressed(KeyCode::Back) && event_id > 0 {
             // Go back in the turn report.
             event_id = event_id - 1;
-            println!("Going back in turn report.");
+            println!("Going back in turn report to {}.", event_id);
         } else if keyboard.just_pressed(KeyCode::Escape) {
             // Close the turn report.
             println!("Closing turn report.");
             turn_report.event_id = None;
         }
+        turn_report.event_id = Some(event_id);
         if event_id >= turn_report.events.len() {
             turn_report.event_id = None;
         } else if turn_report.rendered_event_id != turn_report.event_id {
@@ -310,25 +323,6 @@ fn update_review_turn_button(
                 *visibility = Visibility::Hidden;
             }
         });
-    }
-}
-
-fn evoke_darkness_on_click(
-    mut evoking_state: ResMut<EvokingState>,
-    player_turn: Res<PlayerTurn>,
-    mut interaction_query: Query<
-        &Interaction,
-        (
-            Changed<Interaction>,
-            With<Button>,
-            With<EvokeDarknessButton>,
-        ),
-    >,
-) {
-    if let Some(interaction) = interaction_query.iter_mut().next() {
-        if *interaction == Interaction::Clicked {
-            evoking_state.begin(player_turn.clone());
-        }
     }
 }
 
@@ -496,90 +490,6 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                         Name::new("turn_report_back"),
                     ));
                 });
-        });
-}
-
-#[derive(Component)]
-struct EvokeDarknessButton;
-
-fn add_turn_end_button(mut commands: Commands, assets: Res<MyAssets>) {
-    // Evoke darkness.
-    commands
-        .spawn((
-            ButtonBundle {
-                style: Style {
-                    border: UiRect::all(Val::Px(ONE_UNIT)),
-                    position_type: PositionType::Absolute,
-                    position: UiRect {
-                        bottom: Val::Px(ONE_UNIT),
-                        right: Val::Px(ONE_UNIT),
-                        ..default()
-                    },
-                    ..default()
-                },
-                background_color: Color::WHITE.into(),
-                ..default()
-            },
-            EvokeDarknessButton,
-            RelativeCursorPosition::default(),
-            Name::new("Evoke Darkness"),
-        ))
-        .with_children(|parent| {
-            parent.spawn((TextBundle {
-                style: Style {
-                    flex_shrink: 1.,
-                    ..default()
-                },
-                text: Text::from_section(
-                    "Evoke Darkness",
-                    TextStyle {
-                        font: assets.font.clone(),
-                        font_size: 32.,
-                        color: Color::BLACK,
-                    },
-                ),
-                background_color: Color::rgb(0.8, 0., 0.9).into(),
-                ..default()
-            },));
-        });
-    // Evoke darkness - Inactive.
-    commands
-        .spawn((
-            ButtonBundle {
-                style: Style {
-                    border: UiRect::all(Val::Px(ONE_UNIT)),
-                    position_type: PositionType::Absolute,
-                    position: UiRect {
-                        bottom: Val::Px(ONE_UNIT),
-                        right: Val::Px(ONE_UNIT),
-                        ..default()
-                    },
-                    ..default()
-                },
-                background_color: Color::BLACK.into(),
-                ..default()
-            },
-            RelativeCursorPosition::default(),
-            SimpleTooltip::new("Assign all agents before ending turn."),
-            Name::new("Evoke Darkness Inactive"),
-        ))
-        .with_children(|parent| {
-            parent.spawn((TextBundle {
-                style: Style {
-                    flex_shrink: 1.,
-                    ..default()
-                },
-                text: Text::from_section(
-                    "Evoke Darkness",
-                    TextStyle {
-                        font: assets.font.clone(),
-                        font_size: 32.,
-                        color: Color::BLACK,
-                    },
-                ),
-                background_color: Color::rgba(0.8, 0., 0.9, 0.5).into(),
-                ..default()
-            },));
         });
 }
 

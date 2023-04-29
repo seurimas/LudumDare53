@@ -49,7 +49,7 @@ impl AgentAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Agent {
     pub name: String,
     pub id: AgentId,
@@ -57,6 +57,7 @@ pub struct Agent {
     pub power: u32,
     pub corrupted: bool,
     pub stamina: u32,
+    pub signs: u32,
 }
 
 impl Agent {
@@ -65,10 +66,15 @@ impl Agent {
             name,
             id,
             world_position,
-            power: 1,
+            power: 10,
             corrupted: false,
             stamina: 1,
+            signs: 0,
         }
+    }
+
+    pub fn exhaust(&mut self, amount: u32) {
+        self.stamina = self.stamina.saturating_sub(amount);
     }
 }
 

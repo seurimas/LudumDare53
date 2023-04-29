@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Follower {
     pub sign_holder: bool,
     pub corrupted: bool,
@@ -8,7 +8,18 @@ pub struct Follower {
     pub power: u32,
 }
 
-#[derive(Component)]
+impl Follower {
+    pub fn new(power: u32) -> Self {
+        Self {
+            sign_holder: false,
+            corrupted: false,
+            affinity: None,
+            power,
+        }
+    }
+}
+
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WorldArea {
     pub name: String,
     pub world_position: (i32, i32),
@@ -34,6 +45,83 @@ impl WorldArea {
 
     pub fn add_agent(&mut self, agent: Agent) {
         self.agents.push(agent);
+    }
+
+    pub fn get_agent_mut(&mut self, agent_id: AgentId) -> Option<&mut Agent> {
+        self.agents.iter_mut().find(|a| a.id == agent_id)
+    }
+
+    pub fn get_agent_power(&self, agent_id: AgentId) -> Option<u32> {
+        self.agents
+            .iter()
+            .find(|a| a.id == agent_id)
+            .map(|a| a.power)
+    }
+
+    pub fn get_agent_stamina(&self, agent_id: AgentId) -> Option<u32> {
+        self.agents
+            .iter()
+            .find(|a| a.id == agent_id)
+            .map(|a| a.stamina)
+    }
+
+    pub fn remove_agent(&mut self, agent_id: AgentId) -> Agent {
+        let agent = self
+            .agents
+            .iter()
+            .find(|a| a.id == agent_id)
+            .unwrap()
+            .clone();
+        self.agents.retain(|a| a.id != agent_id);
+        agent
+    }
+
+    pub fn corrupt_followers(&mut self, agent_id: AgentId) -> (u32, u32) {
+        if let Some(follower) = self.followers.iter_mut().find(|follower| {
+            follower.power > 5 && !follower.corrupted && follower.affinity == Some(agent_id.player)
+        }) {
+            if follower.power > 7 {
+                follower.corrupted = true;
+                follower.power *= 10;
+                (1, 0)
+            } else {
+                follower.power /= 2;
+                (0, 1)
+            }
+        } else {
+            (0, 0)
+        }
+    }
+
+    pub fn prostelytize_followers(&mut self, agent_id: AgentId) -> (u32, u32) {
+        let agent_power = self.get_agent_power(agent_id).unwrap_or(0);
+        if let Some(follower) = self.followers.iter_mut().find(|follower| {
+            follower.power < agent_power
+                && !follower.corrupted
+                && follower.affinity != Some(agent_id.player)
+        }) {
+            follower.affinity = Some(agent_id.player);
+            self.get_agent_mut(agent_id).map(|agent| agent.exhaust(10));
+            (1, 0)
+        } else if let Some(follower) = self.followers.iter_mut().find(|follower| {
+            follower.power > agent_power
+                && !follower.corrupted
+                && follower.affinity != Some(agent_id.player)
+                && follower.affinity.is_some()
+        }) {
+            if follower.power >= 2 {
+                follower.power -= 2;
+            }
+            self.get_agent_mut(agent_id).map(|agent| {
+                agent.exhaust(10);
+                if agent.power >= 2 {
+                    agent.power -= 2;
+                }
+            });
+            (0, 1)
+        } else {
+            (1, 0)
+        }
     }
 
     pub fn get_player_agent_count(&self, player: PlayerId) -> u32 {

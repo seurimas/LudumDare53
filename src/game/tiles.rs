@@ -36,7 +36,7 @@ fn debug_map(mut commands: Commands, assets: Res<MyAssets>) {
     for x in 0..10 {
         for y in 0..10 {
             let (base_x, base_y) = get_world_pos_for_tile(x, y);
-            let sprite_id = (rand::random::<f32>() * 5.) as usize;
+            let sprite_id = (rand::random::<f32>() * 2.) as usize + 3;
             let mut tile = commands.spawn((
                 SpriteSheetBundle {
                     texture_atlas: assets.map.clone(),
@@ -65,6 +65,24 @@ fn debug_map(mut commands: Commands, assets: Res<MyAssets>) {
                     AgentId::new(0, agent_id),
                     (x, y),
                 ));
+                if x < 10 {
+                    area.nearest_neighbors.push((x + 1, y));
+                }
+                if x > 0 {
+                    area.nearest_neighbors.push((x - 1, y));
+                }
+                if y < 10 {
+                    area.nearest_neighbors.push((x, y + 1));
+                }
+                if y > 0 {
+                    area.nearest_neighbors.push((x, y - 1));
+                }
+                area.add_follower(Follower::new(2));
+                area.add_follower(Follower::new(6));
+                area.add_follower(Follower::new(12));
+                area.add_follower(Follower::new(20));
+                area.add_follower(Follower::new(21));
+                area.add_follower(Follower::new(50));
                 tile.insert(area);
                 agent_id = agent_id + 1;
             }

@@ -8,6 +8,7 @@ pub mod player;
 pub mod tiles;
 pub mod tooltip;
 pub mod turn_ui;
+pub mod turns;
 pub mod ui;
 
 pub struct GamePlugins;
