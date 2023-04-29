@@ -36,6 +36,17 @@ impl AgentAction {
             }
         }
     }
+
+    pub fn check_sum(&self) -> u32 {
+        match self {
+            AgentAction::None => 0,
+            AgentAction::Move(idx) => 1 + *idx as u32,
+            AgentAction::Prostelytize => 8,
+            AgentAction::Brutalize => 9,
+            AgentAction::Corrupt => 10,
+            AgentAction::Sacrifice => 1,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

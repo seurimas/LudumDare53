@@ -98,6 +98,10 @@ mod multiplayer_tests {
         assert_eq!(parse_runes("ᚢᚠᛌ", true), vec![0b00001]);
         assert_eq!(parse_runes("ᚠᛁᚢᚠ", true), vec![64, 5]);
         assert_eq!(parse_runes("akba", false), vec![64, 5]);
+        assert_eq!(
+            parse_runes("akbaakbaakba", false),
+            vec![64, 5, 0, 84, 0, 64, 5]
+        );
     }
 
     #[test]
@@ -106,6 +110,9 @@ mod multiplayer_tests {
         assert_eq!(generate_runes(&[0b00000001], true), "ᚢᚠ");
         assert_eq!(generate_runes(&[0b100000], true), "ᚠᚢ");
         assert_eq!(generate_runes(&[64, 5], false), "akba");
-        assert_eq!(generate_runes(&[64, 5], true), "ᚠᛁᚢᚠ");
+        assert_eq!(
+            generate_runes(&[64, 5, 0, 84, 0, 64, 5], true),
+            "ᚠᛁᚢᚠᚠᛁᚢᚠᚠᛁᚢᚠ"
+        );
     }
 }

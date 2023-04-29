@@ -1,11 +1,14 @@
 use crate::prelude::*;
 
+use super::multiplayer::{generate_runes, parse_runes};
+
 pub struct DarknessPlugin;
 
 impl Plugin for DarknessPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EvokingState>()
-            .add_system(add_evoking_ui.in_schedule(OnEnter(GameState::Playing)));
+            .add_system(add_evoking_ui.in_schedule(OnEnter(GameState::Playing)))
+            .add_system(debug_evokations.run_if(in_state(GameState::Playing)));
     }
 }
 
@@ -24,11 +27,72 @@ impl Default for EvokingState {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Evokation {
+    pub player_turn: PlayerTurn,
+    pub check_sum: u32,
+}
+
+impl Evokation {
+    pub fn new(player_turn: PlayerTurn) -> Self {
+        let check_sum = player_turn
+            .actions
+            .iter()
+            .fold(0, |acc, (_, action)| acc ^ action.check_sum());
+        Self {
+            player_turn,
+            check_sum,
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.check_sum
+            == self
+                .player_turn
+                .actions
+                .iter()
+                .fold(0, |acc, (_, action)| acc ^ action.check_sum())
+    }
+
+    pub fn retrieve_evokation() -> Option<Evokation> {
+        arboard::Clipboard::new()
+            .and_then(|mut clipboard| clipboard.get_text())
+            .ok()
+            .map(|text| {
+                let futhark = parse_runes(&text, true);
+                if futhark.len() > 0 {
+                    futhark
+                } else {
+                    parse_runes(&text, false)
+                }
+            })
+            .and_then(|data| postcard::from_bytes(data.as_slice()).ok())
+            .filter(|evokation: &Evokation| evokation.is_valid())
+    }
+
+    pub fn store_evokation(&self, futhark: bool) -> Option<String> {
+        let data = postcard::to_allocvec(self).unwrap();
+        let runes = generate_runes(data.as_slice(), futhark);
+        arboard::Clipboard::new()
+            .and_then(|mut clipboard| clipboard.set_text(runes.clone()))
+            .ok()
+            .map(|_| runes)
+    }
+}
+
 impl EvokingState {
     pub fn begin(&mut self, player_turn: PlayerTurn) {
         let mut evoked = HashMap::new();
         evoked.insert(player_turn.player_id, player_turn);
         *self = Self::Evoking { evoked };
+    }
+}
+
+fn debug_evokations(player_turn: Res<PlayerTurn>) {
+    if let Some(evokation) = Evokation::retrieve_evokation() {
+        // println!("Evokation: {:?}", evokation);
+    } else {
+        // Evokation::new(player_turn.clone()).store_evokation(true);
     }
 }
 
