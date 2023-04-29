@@ -17,4 +17,6 @@ pub struct MyAssets {
     #[asset(texture_atlas(tile_size_x = 128., tile_size_y = 128., columns = 4, rows = 4))]
     #[asset(path = "map.png")]
     pub map: Handle<TextureAtlas>,
+    #[asset(path = "anglodavek/Anglodavek-a55E.ttf")]
+    pub font: Handle<Font>,
 }

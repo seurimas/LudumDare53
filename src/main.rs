@@ -2,6 +2,8 @@ mod assets;
 mod game;
 mod prelude;
 mod state;
+use game::GamePlugins;
+
 use crate::prelude::*;
 
 fn main() {
@@ -17,8 +19,8 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(GamePlugins)
         .add_plugin(assets::GameAssetsPlugin)
-        .add_plugin(game::map::MapPlugin)
         .add_system(spawn_camera.in_schedule(OnEnter(GameState::Playing)))
         .run();
 }
