@@ -19,4 +19,8 @@ pub struct MyAssets {
     pub map: Handle<TextureAtlas>,
     #[asset(path = "anglodavek/Anglodavek-a55E.ttf")]
     pub font: Handle<Font>,
+    #[asset(path = "tile_hover.wav")]
+    pub tile_hover: Handle<AudioSource>,
+    #[asset(path = "tile_click.wav")]
+    pub tile_click: Handle<AudioSource>,
 }

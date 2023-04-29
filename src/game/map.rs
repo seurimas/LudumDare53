@@ -5,6 +5,7 @@ use crate::prelude::*;
 #[derive(Component)]
 pub struct MapTile {
     pub selected: bool,
+    pub hovered: bool,
     pub x: i32,
     pub y: i32,
     pub offset_y: f32,
@@ -42,6 +43,7 @@ fn debug_map(mut commands: Commands, assets: Res<MyAssets>) {
                 },
                 MapTile {
                     selected: false,
+                    hovered: false,
                     x,
                     y,
                     offset_y: TILE_SIZE,
@@ -56,7 +58,7 @@ fn debug_map(mut commands: Commands, assets: Res<MyAssets>) {
 fn raise_map(time: Res<Time>, mut query: Query<(&mut Transform, &mut MapTile)>) {
     for (mut transform, mut tile) in query.iter_mut() {
         let translation = &mut transform.translation;
-        if !tile.selected {
+        if !tile.selected && !tile.hovered {
             tile.offset_y = tile.offset_y + time.delta_seconds() * TILE_SIZE * 2.;
             if tile.offset_y > tile.target_y {
                 tile.offset_y = tile.target_y;
@@ -66,33 +68,59 @@ fn raise_map(time: Res<Time>, mut query: Query<(&mut Transform, &mut MapTile)>) 
     }
 }
 
+const MOUSE_SOUND_SCALE: f32 = 10.;
+
 fn map_mouse_system(
-    mut mouse_location: Local<Vec2>,
+    mut mouse_location_timer: Local<(Vec2, f32)>,
+    time: Res<Time>,
     camera: Query<(&Camera, &GlobalTransform)>,
     mut tile_query: Query<&mut MapTile>,
     ui_query: Query<&RelativeCursorPosition>,
     mut cursor_moved: EventReader<CursorMoved>,
     mouse_button_input: Res<Input<MouseButton>>,
+    assets: Res<MyAssets>,
+    audio: Res<Audio>,
 ) {
     for event in cursor_moved.iter() {
-        *mouse_location = event.position;
+        mouse_location_timer.0 = event.position;
     }
+    mouse_location_timer.1 += time.delta_seconds() * MOUSE_SOUND_SCALE;
     if !ui_query.iter().all(|rcp| !rcp.mouse_over()) {
         return;
     }
-    if let Some((x, y)) = get_tile_at_screen_pos(*mouse_location, camera) {
+    if let Some((x, y)) = get_tile_at_screen_pos(mouse_location_timer.0, camera) {
         for mut map_tile in tile_query.iter_mut() {
             if map_tile.x == x && map_tile.y == y {
                 if mouse_button_input.just_pressed(MouseButton::Left) || map_tile.selected {
+                    if !map_tile.selected {
+                        audio.play(assets.tile_click.clone());
+                    }
                     map_tile.selected = true;
                     map_tile.offset_y = -8.;
                     map_tile.target_y = rand::random::<f32>() * 8.;
                 } else if !map_tile.selected {
+                    if !map_tile.hovered {
+                        let volume =
+                            (mouse_location_timer.1 * mouse_location_timer.1).clamp(0., 1.);
+                        audio.play_with_settings(
+                            assets.tile_hover.clone(),
+                            PlaybackSettings {
+                                repeat: false,
+                                volume,
+                                speed: rand::random::<f32>() * 0.5 + 0.5,
+                            },
+                        );
+                        mouse_location_timer.1 = 0.;
+                    }
+                    map_tile.hovered = true;
                     map_tile.offset_y = 0.;
                     map_tile.target_y = rand::random::<f32>() * 8.;
                 }
             } else if mouse_button_input.just_pressed(MouseButton::Left) {
                 map_tile.selected = false;
+                map_tile.hovered = false;
+            } else {
+                map_tile.hovered = false;
             }
         }
     }
