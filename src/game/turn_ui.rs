@@ -6,13 +6,7 @@ pub struct TurnUiPlugin;
 
 impl Plugin for TurnUiPlugin {
     fn build(&self, app: &mut App) {
-        let mut debug_players = HashMap::default();
-        debug_players.insert(PlayerId(0), "Player 1".to_string());
-        app.insert_resource(PlayerTurn::new(PlayerId(0), 5))
-            .insert_resource(PlayerId(0))
-            .insert_resource(GamePlayers(debug_players))
-            .insert_resource(Season(0))
-            .init_resource::<TurnReport>()
+        app.init_resource::<TurnReport>()
             .add_system(update_end_turn_button.run_if(in_state(GameState::Playing)))
             .add_system(review_turn_on_click.run_if(in_state(GameState::Playing)))
             .add_system(update_review_turn_button.run_if(in_state(GameState::Playing)))
@@ -29,7 +23,7 @@ pub enum TurnReportEvent {
         player_names: Vec<String>,
     },
     AgentAction {
-        location: (i32, i32),
+        location: (usize, usize),
         location_name: String,
         agent_name: String,
         action: AgentAction,
@@ -37,18 +31,18 @@ pub enum TurnReportEvent {
         fail_amount: u32,
     },
     Brutalized {
-        location: (i32, i32),
+        location: (usize, usize),
         location_name: String,
         followers: u32,
         locals: u32,
     },
     Sacrificed {
-        location: (i32, i32),
+        location: (usize, usize),
         location_name: String,
         follower: bool,
     },
     SignSeen {
-        location: (i32, i32),
+        location: (usize, usize),
         location_name: String,
         mine: bool,
     },

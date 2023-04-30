@@ -22,14 +22,14 @@ impl Follower {
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WorldArea {
     pub name: String,
-    pub world_position: (i32, i32),
-    pub nearest_neighbors: Vec<(i32, i32)>,
+    pub world_position: (usize, usize),
+    pub nearest_neighbors: Vec<(usize, usize)>,
     pub followers: Vec<Follower>,
     pub agents: Vec<Agent>,
 }
 
 impl WorldArea {
-    pub fn new(name: &str, x: i32, y: i32) -> Self {
+    pub fn new(name: &str, x: usize, y: usize) -> Self {
         WorldArea {
             name: name.to_string(),
             world_position: (x, y),
@@ -161,6 +161,10 @@ impl WorldArea {
             .sum()
     }
 
+    pub fn get_value(&self) -> u32 {
+        self.followers.iter().map(|f| f.power).sum()
+    }
+
     pub fn get_player_corrupted(&self, player: PlayerId) -> u32 {
         self.followers
             .iter()
@@ -191,6 +195,12 @@ fn render_area_ui(
                     *visibility = Visibility::Visible;
                 } else if name.eq_ignore_ascii_case("Area Name") {
                     text.unwrap().sections[0].value = area.name.clone();
+                } else if name.eq_ignore_ascii_case("Area Population") {
+                    let all_followers = area.followers.len();
+                    text.unwrap().sections[0].value = all_followers.to_string();
+                } else if name.eq_ignore_ascii_case("Area Value") {
+                    let all_power = area.get_value();
+                    text.unwrap().sections[0].value = all_power.to_string();
                 } else if name.eq_ignore_ascii_case("Area Followers") {
                     let player_followers = area.get_player_followers(*player);
                     text.unwrap().sections[0].value = player_followers.to_string();

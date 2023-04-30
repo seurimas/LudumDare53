@@ -3,7 +3,19 @@ use crate::prelude::*;
 #[derive(Resource, Deref, Debug, Clone, Serialize, Deserialize)]
 pub struct GamePlayers(pub HashMap<PlayerId, String>);
 
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+impl GamePlayers {
+    pub fn new(players: Vec<String>) -> Self {
+        let mut map = HashMap::new();
+        for (i, name) in players.into_iter().enumerate() {
+            map.insert(PlayerId(i as u32), name);
+        }
+        Self(map)
+    }
+}
+
+#[derive(
+    Resource, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord,
+)]
 pub struct PlayerId(pub u32);
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -13,18 +25,19 @@ pub struct PlayerTurn {
 }
 
 impl PlayerTurn {
-    pub fn new(player_id: PlayerId, agent_count: u32) -> Self {
+    pub fn new(player_id: PlayerId) -> Self {
         let mut actions = HashMap::default();
-        for i in 0..agent_count {
-            actions.insert(
-                AgentId {
-                    player: player_id,
-                    agent: i,
-                },
-                AgentAction::None,
-            );
-        }
         Self { player_id, actions }
+    }
+
+    pub fn initialize_agent(&mut self, agent_id: AgentId) {
+        if !self.actions.contains_key(&agent_id) && agent_id.player == self.player_id {
+            self.actions.insert(agent_id, AgentAction::None);
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.actions.clear();
     }
 
     pub fn set_action(&mut self, agent_id: AgentId, action: AgentAction) {
@@ -42,9 +55,11 @@ impl PlayerTurn {
         if let Some(action) = self.actions.get(&agent_id) {
             if let AgentAction::None = action {
                 return true;
+            } else {
+                return false;
             }
         }
-        false
+        true
     }
 
     pub fn get_unassigned_agents(&self) -> i32 {

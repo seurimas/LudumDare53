@@ -1,8 +1,10 @@
 mod assets;
 mod game;
+mod menu;
 mod prelude;
 mod state;
 use game::GamePlugins;
+use menu::MenuPlugin;
 
 #[macro_use]
 extern crate lazy_static;
@@ -22,14 +24,34 @@ fn main() {
             ..default()
         }))
         .add_plugins(GamePlugins)
+        .add_plugin(MenuPlugin)
         .add_plugin(assets::GameAssetsPlugin)
         .add_system(spawn_camera.in_schedule(OnEnter(GameState::Playing)))
+        .add_system(despawn_camera.in_schedule(OnEnter(GameState::Playing)))
+        .add_system(spawn_menu_camera.in_schedule(OnEnter(GameState::MainMenu)))
+        .add_system(despawn_menu_camera.in_schedule(OnEnter(GameState::MainMenu)))
         .add_system(move_camera.run_if(in_state(GameState::Playing)))
         .run();
 }
 
 fn spawn_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
+}
+
+fn spawn_menu_camera(mut commands: Commands) {
+    commands.spawn(Camera2dBundle::default());
+}
+
+fn despawn_camera(mut commands: Commands, camera: Query<Entity, With<Camera>>) {
+    for entity in camera.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn despawn_menu_camera(mut commands: Commands, camera: Query<Entity, With<Camera>>) {
+    for entity in camera.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
 }
 
 fn move_camera(

@@ -6,7 +6,7 @@ pub struct GameAssetsPlugin;
 impl Plugin for GameAssetsPlugin {
     fn build(&self, app: &mut App) {
         app.add_loading_state(
-            LoadingState::new(GameState::Loading).continue_to_state(GameState::Playing),
+            LoadingState::new(GameState::Loading).continue_to_state(GameState::MainMenu),
         )
         .add_collection_to_loading_state::<_, MyAssets>(GameState::Loading);
     }

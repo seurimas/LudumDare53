@@ -3,7 +3,7 @@ use bevy::{app::PluginGroupBuilder, prelude::PluginGroup};
 pub mod agent;
 pub mod area;
 pub mod darkness;
-pub mod multiplayer;
+pub mod persistence;
 pub mod player;
 pub mod tiles;
 pub mod tooltip;

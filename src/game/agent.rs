@@ -53,7 +53,7 @@ impl AgentAction {
 pub struct Agent {
     pub name: String,
     pub id: AgentId,
-    pub world_position: (i32, i32),
+    pub world_position: (usize, usize),
     pub power: u32,
     pub corrupted: bool,
     pub stamina: u32,
@@ -61,14 +61,14 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new(name: String, id: AgentId, world_position: (i32, i32)) -> Self {
+    pub fn new(name: String, id: AgentId, world_position: (usize, usize), power: u32) -> Self {
         Self {
             name,
             id,
             world_position,
-            power: 10,
+            power,
             corrupted: false,
-            stamina: 1,
+            stamina: 100,
             signs: 0,
         }
     }
@@ -95,7 +95,7 @@ impl AgentId {
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct AgentLocations {
-    pub locations: HashMap<AgentId, (i32, i32)>,
+    pub locations: HashMap<AgentId, (usize, usize)>,
 }
 
 pub struct AgentPlugin;
@@ -105,6 +105,7 @@ impl Plugin for AgentPlugin {
         app.init_resource::<AgentLocations>()
             .add_system(render_agent_ui.run_if(in_state(GameState::Playing)))
             .add_system(update_agent_locations.run_if(in_state(GameState::Playing)))
+            .add_system(prepare_my_turn.run_if(in_state(GameState::Playing)))
             .add_system(update_agent_label.run_if(in_state(GameState::Playing)))
             .add_system(agent_tooltip.run_if(in_state(GameState::Playing)));
     }
@@ -112,8 +113,8 @@ impl Plugin for AgentPlugin {
 
 #[derive(Default)]
 struct AgentUiState {
-    x: i32,
-    y: i32,
+    x: usize,
+    y: usize,
     agent_idx: usize,
     tooltip_control: bool,
 }
@@ -209,6 +210,7 @@ fn render_agent_ui(
         tooltip.value = Some(tooltip_value);
         local.tooltip_control = true;
     } else if local.tooltip_control {
+        local.tooltip_control = false;
         tooltip.value = None;
     }
 }
@@ -227,6 +229,16 @@ fn update_agent_locations(
         }
     }
     agent_locations.locations = locations;
+}
+
+fn prepare_my_turn(
+    player: Res<PlayerId>,
+    mut player_turn: ResMut<PlayerTurn>,
+    mut agent_locations: ResMut<AgentLocations>,
+) {
+    for (agent_id, _) in agent_locations.locations.iter_mut() {
+        player_turn.initialize_agent(*agent_id);
+    }
 }
 
 fn update_agent_label(player_turn: Res<PlayerTurn>, mut text_query: Query<(&Name, &mut Text)>) {

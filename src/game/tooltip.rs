@@ -31,10 +31,13 @@ pub struct Tooltip {
 fn set_simple_helper_tooltips(
     mut tooltip_control: Local<bool>,
     mut tooltip_value: ResMut<Tooltip>,
-    text_query: Query<(&SimpleTooltip, &RelativeCursorPosition)>,
+    text_query: Query<(&SimpleTooltip, &ComputedVisibility, &RelativeCursorPosition)>,
 ) {
     let mut tooltip = None;
-    for (simple_tooltip, _) in text_query.iter().filter(|(_, rcp)| rcp.mouse_over()) {
+    for (simple_tooltip, _, _) in text_query
+        .iter()
+        .filter(|(_, visibility, rcp)| visibility.is_visible() && rcp.mouse_over())
+    {
         tooltip = Some(simple_tooltip.value.clone());
     }
     if let Some(tooltip) = tooltip {

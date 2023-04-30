@@ -7,11 +7,11 @@ pub struct Season(pub i32);
 
 pub struct TurnResults {
     pub report: Vec<TurnReportEvent>,
-    pub new_world_areas: HashMap<(i32, i32), WorldArea>,
+    pub new_world_areas: HashMap<(usize, usize), WorldArea>,
 }
 
 impl TurnResults {
-    pub fn get_new_world_area(&self, position: (i32, i32)) -> Option<WorldArea> {
+    pub fn get_new_world_area(&self, position: (usize, usize)) -> Option<WorldArea> {
         self.new_world_areas.get(&position).cloned()
     }
 }
@@ -102,9 +102,9 @@ pub fn apply_turns(
 }
 
 fn get_agent_location(
-    world_areas: &HashMap<(i32, i32), WorldArea>,
+    world_areas: &HashMap<(usize, usize), WorldArea>,
     agent_id: AgentId,
-) -> Option<(i32, i32)> {
+) -> Option<(usize, usize)> {
     for area in world_areas.values() {
         for agent in &area.agents {
             if agent.id == agent_id {
@@ -117,8 +117,8 @@ fn get_agent_location(
 
 fn move_agents(
     turns: &Vec<PlayerTurn>,
-    world_areas: &mut HashMap<(i32, i32), WorldArea>,
-) -> Vec<(i32, i32, AgentId)> {
+    world_areas: &mut HashMap<(usize, usize), WorldArea>,
+) -> Vec<(usize, usize, AgentId)> {
     let mut results = Vec::new();
     for turn in turns {
         let movement_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
@@ -145,8 +145,8 @@ fn move_agents(
 
 fn corrupt_followers(
     turns: &Vec<PlayerTurn>,
-    world_areas: &mut HashMap<(i32, i32), WorldArea>,
-) -> Vec<(i32, i32, AgentId, u32, u32)> {
+    world_areas: &mut HashMap<(usize, usize), WorldArea>,
+) -> Vec<(usize, usize, AgentId, u32, u32)> {
     let mut results = Vec::new();
     for turn in turns {
         let corruption_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
@@ -171,8 +171,8 @@ fn corrupt_followers(
 
 fn prostelytize_followers(
     turns: &Vec<PlayerTurn>,
-    world_areas: &mut HashMap<(i32, i32), WorldArea>,
-) -> Vec<(i32, i32, AgentId, u32, u32)> {
+    world_areas: &mut HashMap<(usize, usize), WorldArea>,
+) -> Vec<(usize, usize, AgentId, u32, u32)> {
     let mut results = Vec::new();
     for turn in turns {
         let corruption_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
@@ -204,7 +204,7 @@ fn prostelytize_followers(
     results
 }
 
-fn check_winners(world_areas: &HashMap<(i32, i32), WorldArea>) -> Option<PlayerId> {
+fn check_winners(world_areas: &HashMap<(usize, usize), WorldArea>) -> Option<PlayerId> {
     let scores = get_scores(world_areas);
     let max_score = scores.values().max().unwrap_or(&0);
     let winners: Vec<PlayerId> = scores
@@ -219,7 +219,7 @@ fn check_winners(world_areas: &HashMap<(i32, i32), WorldArea>) -> Option<PlayerI
     }
 }
 
-fn get_scores(world_areas: &HashMap<(i32, i32), WorldArea>) -> HashMap<PlayerId, u32> {
+fn get_scores(world_areas: &HashMap<(usize, usize), WorldArea>) -> HashMap<PlayerId, u32> {
     let mut scores = HashMap::new();
     for area in world_areas.values() {
         for agent in &area.agents {

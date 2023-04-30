@@ -256,6 +256,8 @@ fn spawn_area_ui(
         ))
         .with_children(|parent| {
             spawn_labeled_value(parent, font.clone(), "Area Name");
+            spawn_labeled_value(parent, font.clone(), "Area Population");
+            spawn_labeled_value(parent, font.clone(), "Area Value");
             spawn_labeled_value(parent, font.clone(), "Area Followers");
             spawn_labeled_value(parent, font.clone(), "Area Power");
             spawn_labeled_value(parent, font.clone(), "Area Corrupted");

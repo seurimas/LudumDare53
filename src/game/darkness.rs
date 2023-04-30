@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 use super::{
-    multiplayer::{generate_runes, parse_runes},
     player::GamePlayers,
     turn_ui::TurnReport,
     turns::{apply_turns, Season},
@@ -24,10 +23,11 @@ impl Plugin for DarknessPlugin {
 pub enum EvokingState {
     None,
     Evoking {
-        evoked: HashMap<PlayerId, PlayerTurn>,
+        evoked: HashMap<PlayerId, (u64, PlayerTurn)>,
     },
     Ready {
         turns: Vec<PlayerTurn>,
+        seeds: Vec<u64>,
     },
 }
 
@@ -40,13 +40,16 @@ impl Default for EvokingState {
 impl EvokingState {
     pub fn begin(&mut self, player_turn: PlayerTurn) {
         let mut evoked = HashMap::new();
-        evoked.insert(player_turn.player_id, player_turn);
+        evoked.insert(
+            player_turn.player_id,
+            (rand::thread_rng().gen(), player_turn),
+        );
         *self = Self::Evoking { evoked };
     }
 
-    pub fn push(&mut self, player_turn: PlayerTurn) {
+    pub fn push(&mut self, turn_seed: u64, player_turn: PlayerTurn) {
         if let Self::Evoking { evoked } = self {
-            evoked.insert(player_turn.player_id, player_turn);
+            evoked.insert(player_turn.player_id, (turn_seed, player_turn));
         }
     }
 
@@ -55,10 +58,13 @@ impl EvokingState {
             Self::Evoking { evoked } => {
                 if evoked.len() == players.len() {
                     let mut turns = Vec::new();
+                    let mut seeds = Vec::new();
                     for player in players.iter() {
-                        turns.push(evoked.remove(&player.0).unwrap());
+                        let (seed, turn) = evoked.remove(&player.0).unwrap();
+                        turns.push(turn);
+                        seeds.push(seed);
                     }
-                    *self = Self::Ready { turns };
+                    *self = Self::Ready { turns, seeds };
                 }
             }
             _ => {}
@@ -68,17 +74,21 @@ impl EvokingState {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Evokation {
+    pub seed: u64,
     pub player_turn: PlayerTurn,
     pub check_sum: u32,
 }
 
 impl Evokation {
     pub fn new(player_turn: PlayerTurn) -> Self {
+        let seed = rand::thread_rng().gen();
         let check_sum = player_turn
             .actions
             .iter()
-            .fold(0, |acc, (_, action)| acc ^ action.check_sum());
+            .fold(0, |acc, (_, action)| acc ^ action.check_sum())
+            ^ seed as u32;
         Self {
+            seed,
             player_turn,
             check_sum,
         }
@@ -94,28 +104,11 @@ impl Evokation {
     }
 
     pub fn retrieve_evokation() -> Option<Evokation> {
-        arboard::Clipboard::new()
-            .and_then(|mut clipboard| clipboard.get_text())
-            .ok()
-            .map(|text| {
-                let futhark = parse_runes(&text, true);
-                if futhark.len() > 0 {
-                    futhark
-                } else {
-                    parse_runes(&text, false)
-                }
-            })
-            .and_then(|data| postcard::from_bytes(data.as_slice()).ok())
-            .filter(|evokation: &Evokation| evokation.is_valid())
+        retrieve_from_runes::<Evokation>().filter(|evokation: &Evokation| evokation.is_valid())
     }
 
     pub fn store_evokation(&self, futhark: bool) -> Option<String> {
-        let data = postcard::to_allocvec(self).unwrap();
-        let runes = generate_runes(data.as_slice(), futhark);
-        arboard::Clipboard::new()
-            .and_then(|mut clipboard| clipboard.set_text(runes.clone()))
-            .ok()
-            .map(|_| runes)
+        store_in_runes(self, futhark)
     }
 }
 
@@ -130,6 +123,7 @@ fn evoke_darkness_on_click(
             With<EvokeDarknessButton>,
         ),
     >,
+    mut tiles: Query<&mut MapTile>,
     mut evoking_ui: Query<&mut Visibility, With<EvokingUi>>,
 ) {
     if let Some(interaction) = interaction_query.iter_mut().next() {
@@ -139,13 +133,17 @@ fn evoke_darkness_on_click(
             for mut visibility in evoking_ui.iter_mut() {
                 *visibility = Visibility::Visible;
             }
+            for mut tile in tiles.iter_mut() {
+                tile.hovered = false;
+                tile.selected = false;
+            }
         }
     }
 }
 
 fn watch_evokations(mut evoking_state: ResMut<EvokingState>) {
     if let Some(evokation) = Evokation::retrieve_evokation() {
-        evoking_state.push(evokation.player_turn);
+        evoking_state.push(evokation.seed, evokation.player_turn);
     }
 }
 
@@ -154,6 +152,7 @@ fn end_evokation(
     game_players: Res<GamePlayers>,
     mut season: ResMut<Season>,
     mut commands: Commands,
+    mut player_turn: ResMut<PlayerTurn>,
     mut turn_report: ResMut<TurnReport>,
     mut evoking_state: ResMut<EvokingState>,
     query: Query<&WorldArea>,
@@ -161,7 +160,7 @@ fn end_evokation(
     mut evoking_ui: Query<&mut Visibility, With<EvokingUi>>,
 ) {
     evoking_state.check(&game_players);
-    if let EvokingState::Ready { turns } = evoking_state.as_ref() {
+    if let EvokingState::Ready { turns, seeds } = evoking_state.as_ref() {
         let world_areas = query
             .iter()
             .map(|world_area| world_area.clone())
@@ -176,6 +175,7 @@ fn end_evokation(
             }
         }
         *turn_report = TurnReport::new(results.report);
+        player_turn.reset();
         **season = **season + 1;
         *evoking_state = EvokingState::None;
         for mut visibility in evoking_ui.iter_mut() {

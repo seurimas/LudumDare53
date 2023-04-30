@@ -9,8 +9,8 @@ pub struct MapTile {
     pub selected: bool,
     pub hovered: bool,
     pub focused: bool,
-    pub x: i32,
-    pub y: i32,
+    pub x: usize,
+    pub y: usize,
     pub offset_y: f32,
     pub target_y: f32,
     pub base_y: f32,
@@ -20,7 +20,7 @@ pub struct TilesPlugin;
 
 impl Plugin for TilesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(debug_map.in_schedule(OnEnter(GameState::Playing)))
+        app.add_system(load_map.in_schedule(OnEnter(GameState::Playing)))
             .add_system(raise_map.run_if(in_state(GameState::Playing)))
             .add_system(focus_tile.run_if(in_state(GameState::Playing)))
             .add_system(map_mouse_system.run_if(in_state(GameState::Playing)))
@@ -30,18 +30,16 @@ impl Plugin for TilesPlugin {
 
 pub const TILE_SIZE: f32 = 128.;
 
-fn debug_map(mut commands: Commands, assets: Res<MyAssets>) {
-    println!("Spawning debug map");
-    let mut agent_id = 0;
-    for x in 0..10 {
-        for y in 0..10 {
+fn load_map(mut commands: Commands, map: Res<MapDesc>, assets: Res<MyAssets>) {
+    for y in 0..map.height {
+        for x in 0..map.width {
             let (base_x, base_y) = get_world_pos_for_tile(x, y);
-            let sprite_id = (rand::random::<f32>() * 2.) as usize + 3;
+            let sprite_id = map.get_tile(x, y);
             let mut tile = commands.spawn((
                 SpriteSheetBundle {
                     texture_atlas: assets.map.clone(),
                     transform: Transform {
-                        translation: Vec3::new(base_x, base_y, 100. + (y - x) as f32),
+                        translation: Vec3::new(base_x, base_y, 100. + (y as i32 - x as i32) as f32),
                         ..Default::default()
                     },
                     sprite: TextureAtlasSprite::new(sprite_id),
@@ -58,33 +56,10 @@ fn debug_map(mut commands: Commands, assets: Res<MyAssets>) {
                     base_y,
                 },
             ));
-            if sprite_id == 3 || sprite_id == 4 {
-                let mut area = WorldArea::new("Test", x, y);
-                area.add_agent(Agent::new(
-                    "Test".to_string(),
-                    AgentId::new(0, agent_id),
-                    (x, y),
-                ));
-                if x < 10 {
-                    area.nearest_neighbors.push((x + 1, y));
-                }
-                if x > 0 {
-                    area.nearest_neighbors.push((x - 1, y));
-                }
-                if y < 10 {
-                    area.nearest_neighbors.push((x, y + 1));
-                }
-                if y > 0 {
-                    area.nearest_neighbors.push((x, y - 1));
-                }
-                area.add_follower(Follower::new(2));
-                area.add_follower(Follower::new(6));
-                area.add_follower(Follower::new(12));
-                area.add_follower(Follower::new(20));
-                area.add_follower(Follower::new(21));
-                area.add_follower(Follower::new(50));
-                tile.insert(area);
-                agent_id = agent_id + 1;
+            if let Some(area) = map.get_area(x, y) {
+                tile.insert(area.clone());
+            } else {
+                println!("No area for tile ({}, {})", x, y);
             }
         }
     }
@@ -157,7 +132,7 @@ fn map_mouse_system(
     time: Res<Time>,
     camera: Query<(&Camera, &GlobalTransform)>,
     mut tile_query: Query<(&mut MapTile, Option<&WorldArea>)>,
-    ui_query: Query<&RelativeCursorPosition>,
+    ui_query: Query<(&ComputedVisibility, &RelativeCursorPosition)>,
     mut cursor_moved: EventReader<CursorMoved>,
     mouse_button_input: Res<Input<MouseButton>>,
     assets: Res<MyAssets>,
@@ -167,7 +142,13 @@ fn map_mouse_system(
         mouse_location_timer.0 = event.position;
     }
     mouse_location_timer.1 += time.delta_seconds() * MOUSE_SOUND_SCALE;
-    if !ui_query.iter().all(|rcp| !rcp.mouse_over()) {
+    if ui_query
+        .iter()
+        .any(|(visible, rcp)| visible.is_visible() && rcp.mouse_over())
+    {
+        for (mut map_tile, _) in tile_query.iter_mut() {
+            map_tile.hovered = false;
+        }
         return;
     }
     if let Some((x, y)) = get_tile_at_screen_pos(mouse_location_timer.0, camera) {
@@ -211,19 +192,23 @@ fn map_mouse_system(
 pub fn get_tile_at_screen_pos(
     location: Vec2,
     camera: Query<(&Camera, &GlobalTransform)>,
-) -> Option<(i32, i32)> {
+) -> Option<(usize, usize)> {
     let (camera, camera_transform) = camera.single();
     if let Some(mouse_world_location) = camera.viewport_to_world(camera_transform, location) {
         let (sx, sy) = (mouse_world_location.origin.x, mouse_world_location.origin.y);
         let x = sx / TILE_SIZE + sy / (TILE_SIZE / 2.);
         let y = sx / TILE_SIZE - sy / (TILE_SIZE / 2.);
-        Some((x.round() as i32, y.round() as i32))
+        if x >= 0. && y >= 0. {
+            Some((x.round() as usize, y.round() as usize))
+        } else {
+            None
+        }
     } else {
         None
     }
 }
 
-pub fn get_world_pos_for_tile(x: i32, y: i32) -> (f32, f32) {
+pub fn get_world_pos_for_tile(x: usize, y: usize) -> (f32, f32) {
     let base_x = (x as f32 + y as f32) * (TILE_SIZE / 2.);
     let base_y = (x as f32 - y as f32) * (TILE_SIZE / 4.);
     (base_x, base_y)
