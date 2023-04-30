@@ -45,7 +45,7 @@ impl PlayerTurn {
     }
 
     pub fn get_action(&self, agent_id: AgentId) -> Option<AgentAction> {
-        self.actions.get(&agent_id).copied()
+        self.actions.get(&agent_id).cloned()
     }
 
     pub fn is_unassigned_player_agent(&self, agent_id: AgentId) -> bool {

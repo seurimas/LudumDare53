@@ -9,8 +9,9 @@ pub struct MapTile {
     pub selected: bool,
     pub hovered: bool,
     pub focused: bool,
-    pub x: usize,
-    pub y: usize,
+    pub travelling: bool,
+    pub x: u32,
+    pub y: u32,
     pub offset_y: f32,
     pub target_y: f32,
     pub base_y: f32,
@@ -42,13 +43,14 @@ fn load_map(mut commands: Commands, map: Res<MapDesc>, assets: Res<MyAssets>) {
                         translation: Vec3::new(base_x, base_y, 100. + (y as i32 - x as i32) as f32),
                         ..Default::default()
                     },
-                    sprite: TextureAtlasSprite::new(sprite_id),
+                    sprite: TextureAtlasSprite::new(sprite_id as usize),
                     ..Default::default()
                 },
                 MapTile {
                     selected: false,
                     hovered: false,
                     focused: false,
+                    travelling: false,
                     x,
                     y,
                     offset_y: TILE_SIZE,
@@ -88,13 +90,15 @@ fn map_tooltip(
 fn raise_map(time: Res<Time>, mut query: Query<(&mut Transform, &mut MapTile)>) {
     for (mut transform, mut tile) in query.iter_mut() {
         let translation = &mut transform.translation;
-        if !tile.selected && !tile.hovered {
+        if !tile.selected && !tile.hovered && !tile.travelling {
             tile.offset_y = tile.offset_y + time.delta_seconds() * TILE_SIZE * 2.;
             if tile.offset_y > tile.target_y {
                 tile.offset_y = tile.target_y;
             }
         } else if tile.selected {
             tile.offset_y = -8.;
+        } else if tile.travelling {
+            tile.offset_y = 16.;
         } else if tile.hovered {
             tile.offset_y = 0.;
         }
@@ -132,6 +136,7 @@ fn map_mouse_system(
     time: Res<Time>,
     camera: Query<(&Camera, &GlobalTransform)>,
     mut tile_query: Query<(&mut MapTile, Option<&WorldArea>)>,
+    mut agent_action_query: Query<&mut AgentAction>,
     ui_query: Query<(&ComputedVisibility, &RelativeCursorPosition)>,
     mut cursor_moved: EventReader<CursorMoved>,
     mouse_button_input: Res<Input<MouseButton>>,
@@ -164,7 +169,16 @@ fn map_mouse_system(
                     }
                     map_tile.selected = true;
                     map_tile.target_y = rand::random::<f32>() * 8.;
-                } else if !map_tile.selected {
+                } else if m_area.is_some() && mouse_button_input.just_pressed(MouseButton::Right) {
+                    audio.play(assets.tile_click.clone());
+                    agent_action_query.iter_mut().for_each(|mut action| {
+                        if matches!(*action, AgentAction::Move(_, _, _)) {
+                            *action = AgentAction::Move(x, y, m_area.unwrap().name.clone());
+                        }
+                    });
+                    map_tile.travelling = true;
+                    map_tile.selected = false;
+                } else if !map_tile.selected && !map_tile.travelling {
                     if !map_tile.hovered {
                         let volume =
                             (mouse_location_timer.1 * mouse_location_timer.1).clamp(0., 1.);
@@ -184,6 +198,8 @@ fn map_mouse_system(
             } else if mouse_button_input.just_pressed(MouseButton::Left) {
                 map_tile.selected = false;
                 map_tile.hovered = false;
+            } else if mouse_button_input.just_pressed(MouseButton::Right) {
+                map_tile.travelling = false;
             } else {
                 map_tile.hovered = false;
             }
@@ -194,14 +210,14 @@ fn map_mouse_system(
 pub fn get_tile_at_screen_pos(
     location: Vec2,
     camera: Query<(&Camera, &GlobalTransform)>,
-) -> Option<(usize, usize)> {
+) -> Option<(u32, u32)> {
     let (camera, camera_transform) = camera.single();
     if let Some(mouse_world_location) = camera.viewport_to_world(camera_transform, location) {
         let (sx, sy) = (mouse_world_location.origin.x, mouse_world_location.origin.y);
         let x = sx / TILE_SIZE + sy / (TILE_SIZE / 2.);
         let y = sx / TILE_SIZE - sy / (TILE_SIZE / 2.);
         if x.round() >= 0. && y.round() >= 0. {
-            Some((x.round() as usize, y.round() as usize))
+            Some((x.round() as u32, y.round() as u32))
         } else {
             None
         }
@@ -210,7 +226,7 @@ pub fn get_tile_at_screen_pos(
     }
 }
 
-pub fn get_world_pos_for_tile(x: usize, y: usize) -> (f32, f32) {
+pub fn get_world_pos_for_tile(x: u32, y: u32) -> (f32, f32) {
     let base_x = (x as f32 + y as f32) * (TILE_SIZE / 2.);
     let base_y = (x as f32 - y as f32) * (TILE_SIZE / 4.);
     (base_x, base_y)

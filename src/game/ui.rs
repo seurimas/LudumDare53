@@ -212,19 +212,7 @@ fn spawn_agent_section(
                         parent,
                         action_buttons["MoveActive.png"].clone(),
                         action_buttons["Move.png"].clone(),
-                        AgentAction::Move(0),
-                    );
-                    spawn_agent_action_button(
-                        parent,
-                        action_buttons["MoveActive.png"].clone(),
-                        action_buttons["Move.png"].clone(),
-                        AgentAction::Move(1),
-                    );
-                    spawn_agent_action_button(
-                        parent,
-                        action_buttons["MoveActive.png"].clone(),
-                        action_buttons["Move.png"].clone(),
-                        AgentAction::Move(2),
+                        AgentAction::Move(u32::MAX, u32::MAX, "".to_string()),
                     );
                     spawn_agent_action_button(
                         parent,

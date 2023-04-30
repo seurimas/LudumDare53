@@ -2,10 +2,10 @@ use crate::prelude::*;
 
 use super::{player, ui::ActiveInactiveImages};
 
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AgentAction {
     None,
-    Move(usize),
+    Move(u32, u32, String),
     Prostelytize,
     Brutalize,
     Corrupt,
@@ -16,23 +16,19 @@ impl AgentAction {
     pub fn describe(&self) -> String {
         match self {
             AgentAction::None => "This agent is unassigned.".to_string(),
-            AgentAction::Move(idx) => match idx {
-                0 => format!("Move to the nearest area."),
-                1 => format!("Move to the {}nd nearest area.", idx + 1),
-                2 => format!("Move to the {}rd nearest area.", idx + 1),
-                _ => format!("Move to the {}th nearest area.", idx + 1),
-            },
+            AgentAction::Move(_, _, name) => format!("Move to {}.", name),
             AgentAction::Prostelytize => {
-                "Prostelytize to the locals, hoping to gain new followers".to_string()
+                "Prostelytize to the locals, hoping to gain new followers.".to_string()
             }
             AgentAction::Brutalize => {
-                "Brutalize the locals, scaring away the weak and attracting the strong".to_string()
+                "Brutalize the locals, scaring away the weak\nand attracting the strong."
+                    .to_string()
             }
             AgentAction::Corrupt => {
-                "Attempt to corrupt a follower, gaining access to greater power".to_string()
+                "Attempt to corrupt a follower,\ngaining access to greater power.".to_string()
             }
             AgentAction::Sacrifice => {
-                "Sacrifice a local, hoping to unlock a Sign of Corruption".to_string()
+                "Sacrifice a local, hoping to unlock\na Sign of Corruption.".to_string()
             }
         }
     }
@@ -49,7 +45,7 @@ impl AgentAction {
     pub fn check_sum(&self) -> u32 {
         match self {
             AgentAction::None => 0,
-            AgentAction::Move(idx) => 1 + *idx as u32,
+            AgentAction::Move(x, y, _) => (*x + *y) as u32,
             AgentAction::Prostelytize => 8,
             AgentAction::Brutalize => 9,
             AgentAction::Corrupt => 10,
@@ -62,7 +58,7 @@ impl AgentAction {
 pub struct Agent {
     pub name: String,
     pub id: AgentId,
-    pub world_position: (usize, usize),
+    pub world_position: (u32, u32),
     pub power: u32,
     pub corrupted: bool,
     pub stamina: u32,
@@ -70,7 +66,7 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new(name: String, id: AgentId, world_position: (usize, usize), power: u32) -> Self {
+    pub fn new(name: String, id: AgentId, world_position: (u32, u32), power: u32) -> Self {
         Self {
             name,
             id,
@@ -104,7 +100,7 @@ impl AgentId {
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct AgentLocations {
-    pub locations: HashMap<AgentId, (usize, usize)>,
+    pub locations: HashMap<AgentId, (u32, u32)>,
 }
 
 pub struct AgentPlugin;
@@ -122,9 +118,9 @@ impl Plugin for AgentPlugin {
 
 #[derive(Default)]
 struct AgentUiState {
-    x: usize,
-    y: usize,
-    agent_idx: usize,
+    x: u32,
+    y: u32,
+    agent_idx: u32,
     tooltip_control: bool,
 }
 
@@ -192,7 +188,7 @@ fn render_agent_ui(
                 match interaction {
                     Interaction::Clicked => {
                         if let Ok(action) = action_query.get(entity) {
-                            player_turn.set_action(active_agent.id, *action);
+                            player_turn.set_action(active_agent.id, action.clone());
                             if let Some(sound) = assets.action_stings.get(action.sting()) {
                                 audio.play(sound.clone());
                             }
@@ -203,7 +199,7 @@ fn render_agent_ui(
             }
             for (entity, active_inactive, mut image) in image_query.iter_mut() {
                 if let Some(action) = action_query.get(entity).ok() {
-                    if player_turn.get_action(active_agent.id) == Some(*action) {
+                    if player_turn.get_action(active_agent.id) == Some(action.clone()) {
                         image.texture = active_inactive.active.clone();
                     } else {
                         image.texture = active_inactive.inactive.clone();

@@ -22,14 +22,14 @@ impl Follower {
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WorldArea {
     pub name: String,
-    pub world_position: (usize, usize),
-    pub nearest_neighbors: Vec<(usize, usize)>,
+    pub world_position: (u32, u32),
+    pub nearest_neighbors: Vec<(u32, u32)>,
     pub followers: Vec<Follower>,
     pub agents: Vec<Agent>,
 }
 
 impl WorldArea {
-    pub fn new(name: &str, x: usize, y: usize) -> Self {
+    pub fn new(name: &str, x: u32, y: u32) -> Self {
         WorldArea {
             name: name.to_string(),
             world_position: (x, y),
@@ -128,20 +128,20 @@ impl WorldArea {
         self.agents.iter().filter(|a| a.id.player == player).count() as u32
     }
 
-    pub fn get_nth_player_agent(&self, player: PlayerId, agent: usize) -> Option<&Agent> {
+    pub fn get_nth_player_agent(&self, player: PlayerId, agent: u32) -> Option<&Agent> {
         self.agents
             .iter()
             .filter(|a| a.id.player == player)
-            .nth(agent)
+            .nth(agent as usize)
     }
 
-    pub fn get_unassigned_player_agent(&self, player_turn: &PlayerTurn) -> Option<usize> {
+    pub fn get_unassigned_player_agent(&self, player_turn: &PlayerTurn) -> Option<u32> {
         self.agents
             .iter()
             .filter(|a| a.id.player == player_turn.player_id)
             .enumerate()
             .filter(|(_, a)| player_turn.is_unassigned_player_agent(a.id))
-            .map(|(idx, _)| idx)
+            .map(|(idx, _)| idx as u32)
             .next()
     }
 

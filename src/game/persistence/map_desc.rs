@@ -4,18 +4,18 @@ use crate::prelude::*;
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MapDesc {
-    pub width: usize,
-    pub height: usize,
-    pub tiles: Vec<usize>,
+    pub width: u32,
+    pub height: u32,
+    pub tiles: Vec<u32>,
     pub areas: Vec<WorldArea>,
 }
 
 impl MapDesc {
-    pub fn get_tile(&self, x: usize, y: usize) -> usize {
-        self.tiles[x + y * self.width as usize]
+    pub fn get_tile(&self, x: u32, y: u32) -> u32 {
+        self.tiles[(x + y * self.width) as usize]
     }
 
-    pub fn get_area(&self, x: usize, y: usize) -> Option<&WorldArea> {
+    pub fn get_area(&self, x: u32, y: u32) -> Option<&WorldArea> {
         self.areas.iter().find(|a| a.world_position == (x, y))
     }
 }
@@ -36,8 +36,8 @@ const VILLAGE_NOUNS: [&str; 10] = [
     "Hollow", "Valley", "Cairn", "Bend", "Hole", "Pond", "Dale", "Meet", "Ford", "End",
 ];
 
-const CITY: usize = 4;
-const VILLAGE: usize = 3;
+const CITY: u32 = 4;
+const VILLAGE: u32 = 3;
 
 fn generate_village_name(rng: &mut StdRng) -> String {
     match rng.gen_range(0..=4) {
@@ -171,7 +171,7 @@ fn generate_agent_name(rng: &mut StdRng) -> String {
     format!("{}{}", choose(rng, &PREFIX), choose(rng, &SUFFIX))
 }
 
-fn generate_area(rng: &mut StdRng, x: usize, y: usize, tile: usize) -> Option<WorldArea> {
+fn generate_area(rng: &mut StdRng, x: u32, y: u32, tile: u32) -> Option<WorldArea> {
     match tile {
         CITY => {
             let mut area = WorldArea::new(&generate_city_name(rng), x, y);
@@ -238,7 +238,7 @@ pub fn generate_map(mut players: Vec<PlayerId>) -> MapDesc {
         if tiles[idx] == VILLAGE || tiles[idx] == CITY {
             let x = idx % width;
             let y = idx / width;
-            if let Some(new_area) = generate_area(&mut rng, x, y, tiles[idx]) {
+            if let Some(new_area) = generate_area(&mut rng, x as u32, y as u32, tiles[idx]) {
                 areas.push(new_area);
             }
         }
@@ -247,7 +247,7 @@ pub fn generate_map(mut players: Vec<PlayerId>) -> MapDesc {
     let mut valid_agent_locations = areas
         .iter()
         .map(|a| a.world_position)
-        .collect::<Vec<(usize, usize)>>();
+        .collect::<Vec<(u32, u32)>>();
     for player in players.iter() {
         for id in 0..=3 {
             let (x, y) = choose(&mut rng, &valid_agent_locations);
@@ -271,9 +271,23 @@ pub fn generate_map(mut players: Vec<PlayerId>) -> MapDesc {
                 .push(agent);
         }
     }
+    for _ in 0..players.len() {
+        for _ in 0..4 {
+            let (x, y) = choose(&mut rng, &valid_agent_locations);
+            println!("Sign at {}, {}", x, y);
+            valid_agent_locations.retain(|p| *p != (x, y));
+            areas
+                .iter_mut()
+                .find(|a| a.world_position == (x, y))
+                .unwrap()
+                .followers
+                .first_mut()
+                .map(|follower| follower.sign_holder = true);
+        }
+    }
     MapDesc {
-        width,
-        height,
+        width: width as u32,
+        height: height as u32,
         tiles,
         areas,
     }

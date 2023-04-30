@@ -23,7 +23,7 @@ pub enum TurnReportEvent {
         player_names: Vec<String>,
     },
     AgentAction {
-        location: (usize, usize),
+        location: (u32, u32),
         location_name: String,
         agent_name: String,
         action: AgentAction,
@@ -31,18 +31,18 @@ pub enum TurnReportEvent {
         fail_amount: u32,
     },
     Brutalized {
-        location: (usize, usize),
+        location: (u32, u32),
         location_name: String,
         followers: u32,
         locals: u32,
     },
     Sacrificed {
-        location: (usize, usize),
+        location: (u32, u32),
         location_name: String,
         follower: bool,
     },
     SignSeen {
-        location: (usize, usize),
+        location: (u32, u32),
         location_name: String,
         mine: bool,
     },
@@ -69,7 +69,9 @@ impl TurnReportEvent {
                 AgentAction::Corrupt => format!("Corruption at {}", location_name),
                 AgentAction::Sacrifice => format!("Sacrifice at {}", location_name),
                 AgentAction::Prostelytize => format!("Prostelytizing at {}", location_name),
-                AgentAction::Move(_) => format!("{} arrived at {}", agent_name, location_name),
+                AgentAction::Move(_, _, _) => {
+                    format!("{} arrived at {}", agent_name, location_name)
+                }
                 AgentAction::None => format!("???"),
             },
             TurnReportEvent::Brutalized { location_name, .. } => {
@@ -136,7 +138,7 @@ impl TurnReportEvent {
                     "{} arrived at {} and converted the locals.",
                     agent_name, location_name
                 )],
-                AgentAction::Move(_) => {
+                AgentAction::Move(_, _, _) => {
                     vec![format!("{} arrived at {}.", agent_name, location_name)]
                 }
                 AgentAction::None => vec![format!("???")],
@@ -194,8 +196,8 @@ impl TurnReportEvent {
 #[derive(Resource, Debug, Clone, Default)]
 pub struct TurnReport {
     pub events: Vec<TurnReportEvent>,
-    pub event_id: Option<usize>,
-    pub rendered_event_id: Option<usize>,
+    pub event_id: Option<u32>,
+    pub rendered_event_id: Option<u32>,
 }
 
 impl TurnReport {
@@ -244,12 +246,12 @@ fn view_turn_report(
             turn_report.event_id = None;
         }
         turn_report.event_id = Some(event_id);
-        if event_id >= turn_report.events.len() {
+        if event_id >= turn_report.events.len() as u32 {
             turn_report.event_id = None;
         } else if turn_report.rendered_event_id != turn_report.event_id {
             turn_report.rendered_event_id = turn_report.event_id;
 
-            let event = turn_report.events.get(event_id).unwrap();
+            let event = turn_report.events.get(event_id as usize).unwrap();
 
             if let Some(mut title) = text_query
                 .iter_mut()

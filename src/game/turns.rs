@@ -7,11 +7,11 @@ pub struct Season(pub i32);
 
 pub struct TurnResults {
     pub report: Vec<TurnReportEvent>,
-    pub new_world_areas: HashMap<(usize, usize), WorldArea>,
+    pub new_world_areas: HashMap<(u32, u32), WorldArea>,
 }
 
 impl TurnResults {
-    pub fn get_new_world_area(&self, position: (usize, usize)) -> Option<WorldArea> {
+    pub fn get_new_world_area(&self, position: (u32, u32)) -> Option<WorldArea> {
         self.new_world_areas.get(&position).cloned()
     }
 }
@@ -37,7 +37,7 @@ pub fn apply_turns(
                 location: (*x, *y),
                 location_name: new_world_areas[&(*x, *y)].name.clone(),
                 agent_name: agents[&agent_id].name.clone(),
-                action: AgentAction::Move(0),
+                action: AgentAction::Move(*x, *y, new_world_areas[&(*x, *y)].name.clone()),
                 success_amount: 0,
                 fail_amount: 0,
             })
@@ -102,9 +102,9 @@ pub fn apply_turns(
 }
 
 fn get_agent_location(
-    world_areas: &HashMap<(usize, usize), WorldArea>,
+    world_areas: &HashMap<(u32, u32), WorldArea>,
     agent_id: AgentId,
-) -> Option<(usize, usize)> {
+) -> Option<(u32, u32)> {
     for area in world_areas.values() {
         for agent in &area.agents {
             if agent.id == agent_id {
@@ -117,26 +117,28 @@ fn get_agent_location(
 
 fn move_agents(
     turns: &Vec<PlayerTurn>,
-    world_areas: &mut HashMap<(usize, usize), WorldArea>,
-) -> Vec<(usize, usize, AgentId)> {
+    world_areas: &mut HashMap<(u32, u32), WorldArea>,
+) -> Vec<(u32, u32, AgentId)> {
     let mut results = Vec::new();
     for turn in turns {
         let movement_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
-            if let AgentAction::Move(idx) = action {
-                Some((agent_id, idx))
+            if let AgentAction::Move(x, y, _) = action {
+                Some((agent_id, x, y))
             } else {
                 None
             }
         });
-        for (agent_id, neighbor_idx) in movement_actions {
+        for (agent_id, x, y) in movement_actions {
             if let Some(source) = get_agent_location(&world_areas, *agent_id) {
+                if !world_areas.contains_key(&(*x, *y)) {
+                    continue;
+                }
                 let agent = world_areas
                     .get_mut(&source)
                     .unwrap()
                     .remove_agent(*agent_id);
-                let target = world_areas[&source].nearest_neighbors[*neighbor_idx];
-                world_areas.get_mut(&target).unwrap().add_agent(agent);
-                results.push((source.0, source.1, *agent_id));
+                world_areas.get_mut(&(*x, *y)).unwrap().add_agent(agent);
+                results.push((*x, *y, *agent_id));
             }
         }
     }
@@ -145,8 +147,8 @@ fn move_agents(
 
 fn corrupt_followers(
     turns: &Vec<PlayerTurn>,
-    world_areas: &mut HashMap<(usize, usize), WorldArea>,
-) -> Vec<(usize, usize, AgentId, u32, u32)> {
+    world_areas: &mut HashMap<(u32, u32), WorldArea>,
+) -> Vec<(u32, u32, AgentId, u32, u32)> {
     let mut results = Vec::new();
     for turn in turns {
         let corruption_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
@@ -171,8 +173,8 @@ fn corrupt_followers(
 
 fn prostelytize_followers(
     turns: &Vec<PlayerTurn>,
-    world_areas: &mut HashMap<(usize, usize), WorldArea>,
-) -> Vec<(usize, usize, AgentId, u32, u32)> {
+    world_areas: &mut HashMap<(u32, u32), WorldArea>,
+) -> Vec<(u32, u32, AgentId, u32, u32)> {
     let mut results = Vec::new();
     for turn in turns {
         let corruption_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
@@ -204,7 +206,7 @@ fn prostelytize_followers(
     results
 }
 
-fn check_winners(world_areas: &HashMap<(usize, usize), WorldArea>) -> Option<PlayerId> {
+fn check_winners(world_areas: &HashMap<(u32, u32), WorldArea>) -> Option<PlayerId> {
     let scores = get_scores(world_areas);
     let max_score = scores.values().max().unwrap_or(&0);
     let winners: Vec<PlayerId> = scores
@@ -219,7 +221,7 @@ fn check_winners(world_areas: &HashMap<(usize, usize), WorldArea>) -> Option<Pla
     }
 }
 
-fn get_scores(world_areas: &HashMap<(usize, usize), WorldArea>) -> HashMap<PlayerId, u32> {
+fn get_scores(world_areas: &HashMap<(u32, u32), WorldArea>) -> HashMap<PlayerId, u32> {
     let mut scores = HashMap::new();
     for area in world_areas.values() {
         for agent in &area.agents {

@@ -31,7 +31,7 @@ pub struct MenuState {
     pub awaiting_name: bool,
     pub awaiting_players: bool,
     pub players: HashSet<Joiner>,
-    pub ai: usize,
+    pub ai: u32,
 }
 
 fn add_welcome_screen(mut commands: Commands, assets: Res<MyAssets>) {
