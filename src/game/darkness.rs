@@ -168,7 +168,13 @@ fn end_evokation(
             .iter()
             .map(|world_area| world_area.clone())
             .collect::<Vec<WorldArea>>();
-        let results = apply_turns(**season, *player_id, turns.clone(), world_areas);
+        let results = apply_turns(
+            **season,
+            *player_id,
+            turns.clone(),
+            seeds.clone(),
+            world_areas,
+        );
         println!("{:?}", results.report);
         for (entity, map_tile) in tile_query.iter() {
             if let Some(new_world_area) = results.get_new_world_area((map_tile.x, map_tile.y)) {

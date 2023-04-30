@@ -60,8 +60,6 @@ fn load_map(mut commands: Commands, map: Res<MapDesc>, assets: Res<MyAssets>) {
             ));
             if let Some(area) = map.get_area(x, y) {
                 tile.insert(area.clone());
-            } else {
-                println!("No area for tile ({}, {})", x, y);
             }
         }
     }
@@ -156,9 +154,7 @@ fn map_mouse_system(
         }
         return;
     }
-    println!("Mouse location: {:?}", mouse_location_timer.0);
     if let Some((x, y)) = get_tile_at_screen_pos(mouse_location_timer.0, camera) {
-        println!("Mouse tile: ({}, {})", x, y);
         for (mut map_tile, m_area) in tile_query.iter_mut() {
             if map_tile.x == x && map_tile.y == y {
                 if m_area.is_some()

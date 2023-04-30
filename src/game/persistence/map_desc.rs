@@ -143,6 +143,11 @@ fn generate_city_population(rng: &mut StdRng, area: &mut WorldArea) {
     for _ in 0..lower_class {
         area.followers.push(Follower::new(rng.gen_range(1..10)));
     }
+    for _ in 0..rng.gen_range(2..=3) {
+        let sign_holder = choose_mut(rng, &mut area.followers);
+        sign_holder.sign_holder = true;
+        sign_holder.power += 10;
+    }
 }
 
 fn generate_village_population(rng: &mut StdRng, area: &mut WorldArea) {
@@ -154,6 +159,11 @@ fn generate_village_population(rng: &mut StdRng, area: &mut WorldArea) {
     }
     for _ in 0..lower_class {
         area.followers.push(Follower::new(rng.gen_range(1..10)));
+    }
+    for _ in 0..rng.gen_range(2..=3) {
+        let sign_holder = choose_mut(rng, &mut area.followers);
+        sign_holder.sign_holder = true;
+        sign_holder.power += 15;
     }
 }
 

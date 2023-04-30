@@ -12,6 +12,8 @@ pub enum AgentAction {
     Sacrifice,
 }
 
+pub const CORRUPT_POWER: u32 = 30;
+
 impl AgentAction {
     pub fn describe(&self) -> String {
         match self {
@@ -29,6 +31,56 @@ impl AgentAction {
             }
             AgentAction::Sacrifice => {
                 "Sacrifice a local, hoping to unlock\na Sign of Corruption.".to_string()
+            }
+        }
+    }
+
+    pub fn invalid_reasons(&self, agent: &Agent, area: &WorldArea) -> Option<String> {
+        match self {
+            AgentAction::None => None,
+            AgentAction::Move(x, y, name) => {
+                if name.len() <= 3 {
+                    Some("Must select a location to travel to.".to_string())
+                } else if *x == area.world_position.0 && *y == area.world_position.1 {
+                    Some("Must select a different location to travel to.".to_string())
+                } else {
+                    None
+                }
+            }
+            AgentAction::Prostelytize => {
+                if area.can_prostelytize(agent) {
+                    None
+                } else {
+                    Some("You find no chances in the remaining minds here.".to_string())
+                }
+            }
+            AgentAction::Brutalize => {
+                if area.get_player_power(agent.id.player) > area.get_value() / 5 {
+                    None
+                } else {
+                    Some("The heretics would overpower your followers.".to_string())
+                }
+            }
+            AgentAction::Corrupt => {
+                if area.get_player_power(agent.id.player) <= CORRUPT_POWER {
+                    Some(format!(
+                        "You need {} power to corrupt a follower.",
+                        CORRUPT_POWER
+                    ))
+                } else if area.corrupted_followers(agent.id.player) > 0 {
+                    Some("You already have a corrupted follower to enact sacrifices.".to_string())
+                } else {
+                    None
+                }
+            }
+            AgentAction::Sacrifice => {
+                if area.corrupted_count(agent.id.player) == 0 {
+                    Some("You have no corrupted followers to enact sacrifices.".to_string())
+                } else if area.get_player_power(agent.id.player) <= area.get_value() / 3 {
+                    Some(format!("The heretics would stop your public sacrifice."))
+                } else {
+                    None
+                }
             }
         }
     }
@@ -180,7 +232,13 @@ fn render_agent_ui(
                     }
                 } else if let Ok(action) = action_query.get(entity) {
                     if rcp.map(|rcp| rcp.mouse_over()).unwrap_or_default() {
-                        tooltip_value = Some(action.describe());
+                        if let Some(invalid_reason) =
+                            action.invalid_reasons(active_agent, world_area)
+                        {
+                            tooltip_value = Some(invalid_reason);
+                        } else {
+                            tooltip_value = Some(action.describe());
+                        }
                     }
                 }
             }
@@ -188,9 +246,11 @@ fn render_agent_ui(
                 match interaction {
                     Interaction::Clicked => {
                         if let Ok(action) = action_query.get(entity) {
-                            player_turn.set_action(active_agent.id, action.clone());
-                            if let Some(sound) = assets.action_stings.get(action.sting()) {
-                                audio.play(sound.clone());
+                            if action.invalid_reasons(active_agent, world_area).is_none() {
+                                player_turn.set_action(active_agent.id, action.clone());
+                                if let Some(sound) = assets.action_stings.get(action.sting()) {
+                                    audio.play(sound.clone());
+                                }
                             }
                         }
                     }
@@ -201,6 +261,8 @@ fn render_agent_ui(
                 if let Some(action) = action_query.get(entity).ok() {
                     if player_turn.get_action(active_agent.id) == Some(action.clone()) {
                         image.texture = active_inactive.active.clone();
+                    } else if action.invalid_reasons(active_agent, world_area).is_some() {
+                        image.texture = active_inactive.deactivated.clone();
                     } else {
                         image.texture = active_inactive.inactive.clone();
                     }
@@ -214,6 +276,15 @@ fn render_agent_ui(
                 {
                     *visibility = Visibility::Hidden;
                 }
+            }
+        }
+    } else {
+        for (_, name, _, _, mut visibility) in ui_query.iter_mut() {
+            if name
+                .map(|name| name.eq_ignore_ascii_case("Area Agent"))
+                .unwrap_or_default()
+            {
+                *visibility = Visibility::Hidden;
             }
         }
     }
@@ -252,11 +323,29 @@ fn prepare_my_turn(
     }
 }
 
-fn update_agent_label(player_turn: Res<PlayerTurn>, mut text_query: Query<(&Name, &mut Text)>) {
+fn update_agent_label(
+    player_turn: Res<PlayerTurn>,
+    mut text_query: Query<(&Name, &mut Text)>,
+    areas: Query<&WorldArea>,
+) {
     let unassigned_agents = player_turn.get_unassigned_agents();
+
+    let corrupted_count: u32 = areas
+        .iter()
+        .map(|area| area.corrupted_count(player_turn.player_id))
+        .sum();
+
+    let sign_count = areas
+        .iter()
+        .map(|area| area.sign_count(player_turn.player_id))
+        .sum::<u32>();
     for (name, mut text) in text_query.iter_mut() {
         if name.eq_ignore_ascii_case("Agents-value") {
             text.sections[0].value = unassigned_agents.to_string();
+        } else if name.eq_ignore_ascii_case("Corrupted-value") {
+            text.sections[0].value = corrupted_count.to_string();
+        } else if name.eq_ignore_ascii_case("Signs-value") {
+            text.sections[0].value = sign_count.to_string();
         }
     }
 }

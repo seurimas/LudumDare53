@@ -140,17 +140,20 @@ fn spawn_labeled_value(parent: &mut ChildBuilder, font: Handle<Font>, name: &'st
 pub struct ActiveInactiveImages {
     pub active: Handle<Image>,
     pub inactive: Handle<Image>,
+    pub deactivated: Handle<Image>,
 }
 
 fn spawn_agent_action_button(
     parent: &mut ChildBuilder,
     active_action_button: Handle<Image>,
     inactive_action_button: Handle<Image>,
+    deactivated_action_button: Handle<Image>,
     agent_action: AgentAction,
 ) {
     let images = ActiveInactiveImages {
         active: active_action_button,
         inactive: inactive_action_button.clone(),
+        deactivated: deactivated_action_button,
     };
     parent.spawn((
         ButtonBundle {
@@ -188,7 +191,6 @@ fn spawn_agent_section(
         .with_children(|parent| {
             spawn_labeled_value(parent, font.clone(), "Agent");
             spawn_labeled_value(parent, font.clone(), "Agent Power");
-            spawn_labeled_value(parent, font.clone(), "Agent Stamina");
             spawn_labeled_value(parent, font.clone(), "Corrupted?");
             parent
                 .spawn((
@@ -212,13 +214,36 @@ fn spawn_agent_section(
                         parent,
                         action_buttons["MoveActive.png"].clone(),
                         action_buttons["Move.png"].clone(),
+                        action_buttons["MoveDeactivated.png"].clone(),
                         AgentAction::Move(u32::MAX, u32::MAX, "".to_string()),
                     );
                     spawn_agent_action_button(
                         parent,
                         action_buttons["ProstelytizeActive.png"].clone(),
                         action_buttons["Prostelytize.png"].clone(),
+                        action_buttons["ProstelytizeDeactivated.png"].clone(),
                         AgentAction::Prostelytize,
+                    );
+                    spawn_agent_action_button(
+                        parent,
+                        action_buttons["BrutalizeActive.png"].clone(),
+                        action_buttons["Brutalize.png"].clone(),
+                        action_buttons["BrutalizeDeactivated.png"].clone(),
+                        AgentAction::Brutalize,
+                    );
+                    spawn_agent_action_button(
+                        parent,
+                        action_buttons["CorruptActive.png"].clone(),
+                        action_buttons["Corrupt.png"].clone(),
+                        action_buttons["CorruptDeactivated.png"].clone(),
+                        AgentAction::Corrupt,
+                    );
+                    spawn_agent_action_button(
+                        parent,
+                        action_buttons["SacrificeActive.png"].clone(),
+                        action_buttons["Sacrifice.png"].clone(),
+                        action_buttons["SacrificeDeactivated.png"].clone(),
+                        AgentAction::Sacrifice,
                     );
                 });
         });

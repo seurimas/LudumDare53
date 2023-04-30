@@ -34,8 +34,19 @@ pub struct MyAssets {
         paths(
             "Move.png",
             "MoveActive.png",
+            "MoveDeactivated.png",
             "Prostelytize.png",
-            "ProstelytizeActive.png"
+            "ProstelytizeActive.png",
+            "ProstelytizeDeactivated.png",
+            "Brutalize.png",
+            "BrutalizeActive.png",
+            "BrutalizeDeactivated.png",
+            "Sacrifice.png",
+            "SacrificeActive.png",
+            "SacrificeDeactivated.png",
+            "Corrupt.png",
+            "CorruptActive.png",
+            "CorruptDeactivated.png"
         ),
         collection(typed, mapped)
     )]

@@ -1,3 +1,5 @@
+use std::convert;
+
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -76,51 +78,105 @@ impl WorldArea {
         agent
     }
 
-    pub fn corrupt_followers(&mut self, agent_id: AgentId) -> (u32, u32) {
-        if let Some(follower) = self.followers.iter_mut().find(|follower| {
-            follower.power > 5 && !follower.corrupted && follower.affinity == Some(agent_id.player)
-        }) {
-            if follower.power > 7 {
-                follower.corrupted = true;
-                follower.power *= 10;
-                (1, 0)
-            } else {
-                follower.power /= 2;
-                (0, 1)
-            }
+    pub fn sacrifice_followers(&mut self, agent_id: AgentId, rng: &mut StdRng) -> (u32, u32) {
+        let agent = self.agents.iter_mut().find(|a| a.id == agent_id);
+        if agent.is_none() {
+            return (0, 0);
+        }
+        let agent = agent.unwrap();
+        let player_followers = self
+            .followers
+            .iter_mut()
+            .filter(can_be_sign_holder(agent_id))
+            .count();
+        let my_followers = self
+            .followers
+            .iter_mut()
+            .filter(can_be_sign_holder(agent_id));
+
+        let sacrificed_follower = choose_mut_iter(rng, my_followers, player_followers);
+        if sacrificed_follower.sign_holder {
+            agent.power += sacrificed_follower.power;
+            agent.signs += 1;
+            sacrificed_follower.power = 0;
+            (1, 0)
         } else {
-            (0, 0)
+            agent.power += sacrificed_follower.power / 2;
+            sacrificed_follower.power = 0;
+            (0, 1)
         }
     }
 
-    pub fn prostelytize_followers(&mut self, agent_id: AgentId) -> (u32, u32) {
-        let agent_power = self.get_agent_power(agent_id).unwrap_or(0);
-        if let Some(follower) = self.followers.iter_mut().find(|follower| {
-            follower.power < agent_power
-                && !follower.corrupted
-                && follower.affinity != Some(agent_id.player)
-        }) {
-            follower.affinity = Some(agent_id.player);
-            self.get_agent_mut(agent_id).map(|agent| agent.exhaust(10));
-            (1, 0)
-        } else if let Some(follower) = self.followers.iter_mut().find(|follower| {
-            follower.power > agent_power
-                && !follower.corrupted
-                && follower.affinity != Some(agent_id.player)
-                && follower.affinity.is_some()
-        }) {
-            if follower.power >= 2 {
-                follower.power -= 2;
-            }
-            self.get_agent_mut(agent_id).map(|agent| {
-                agent.exhaust(10);
-                if agent.power >= 2 {
-                    agent.power -= 2;
-                }
-            });
-            (0, 1)
+    pub fn corrupt_followers(&mut self, agent_id: AgentId, rng: &mut StdRng) -> (u32, u32) {
+        let player_followers = self.get_player_followers(agent_id.player) as usize;
+        let agent = self.agents.iter_mut().find(|a| a.id == agent_id);
+        if agent.is_none() {
+            return (0, 0);
+        }
+        let agent = agent.unwrap();
+        let my_followers = self
+            .followers
+            .iter_mut()
+            .filter(|follower| follower.affinity == Some(agent_id.player));
+        let corrupted_follower = choose_mut_iter(rng, my_followers, player_followers);
+        if corrupted_follower.sign_holder {
+            corrupted_follower.corrupted = true;
+            corrupted_follower.power *= 10;
+            agent.signs += 1;
+            corrupted_follower.sign_holder = false;
+            (1, 1)
+        } else if rng.gen_bool(0.333) {
+            corrupted_follower.power /= 10;
+            (0, 0)
         } else {
+            corrupted_follower.corrupted = true;
+            corrupted_follower.power *= 10;
             (1, 0)
+        }
+    }
+
+    pub fn can_prostelytize(&self, agent: &Agent) -> bool {
+        self.followers.iter().any(|follower| {
+            follower.power < agent.power
+                && !follower.corrupted
+                && follower.affinity != Some(agent.id.player)
+        })
+    }
+
+    pub fn prostelytize_followers(
+        &mut self,
+        agent_id: AgentId,
+        rng: &mut StdRng,
+    ) -> (u32, u32, Option<PlayerId>) {
+        let agent = self.agents.iter_mut().find(|a| a.id == agent_id);
+        if agent.is_none() {
+            return (0, 0, None);
+        }
+        let mut agent = agent.unwrap();
+        agent.exhaust(10);
+        let follower = choose_mut(rng, self.followers.as_mut_slice());
+        if follower.affinity.is_none() {
+            if follower.power < agent.power {
+                follower.affinity = Some(agent_id.player);
+                agent.power += (follower.power / 2).clamp(3, 10);
+                return (1, 0, None);
+            } else {
+                agent.power += 3;
+                return (0, 1, None);
+            }
+        } else if follower.affinity == Some(agent_id.player) {
+            agent.power += (follower.power / 2).clamp(3, 10);
+            follower.power += (agent.power / 5).clamp(1, 3);
+            return (0, 0, None);
+        } else {
+            if rng.gen_range(0..=agent.power) > follower.power {
+                agent.power += (follower.power / 2).clamp(3, 5);
+                let converted_player = follower.affinity;
+                follower.affinity = Some(agent_id.player);
+                return (1, 0, converted_player);
+            } else {
+                return (0, 1, None);
+            }
         }
     }
 
@@ -160,16 +216,44 @@ impl WorldArea {
             .sum()
     }
 
-    pub fn get_value(&self) -> u32 {
-        self.followers.iter().map(|f| f.power).sum()
-    }
-
-    pub fn get_player_corrupted(&self, player: PlayerId) -> u32 {
+    pub fn corrupted_followers(&self, player: PlayerId) -> u32 {
         self.followers
             .iter()
             .filter(|f| f.affinity == Some(player) && f.corrupted)
             .count() as u32
     }
+
+    pub fn corrupted_agents(&self, player: PlayerId) -> u32 {
+        self.agents
+            .iter()
+            .filter(|a| a.id.player == player && a.corrupted)
+            .count() as u32
+    }
+
+    pub fn corrupted_count(&self, player: PlayerId) -> u32 {
+        self.corrupted_followers(player) + self.corrupted_agents(player)
+    }
+
+    pub fn get_value(&self) -> u32 {
+        self.followers.iter().map(|f| f.power).sum()
+    }
+
+    pub fn sign_count(&self, player: PlayerId) -> u32 {
+        self.agents
+            .iter()
+            .filter_map(|a| {
+                if a.id.player == player {
+                    Some(a.signs)
+                } else {
+                    None
+                }
+            })
+            .sum()
+    }
+}
+
+fn can_be_sign_holder(agent_id: AgentId) -> impl Fn(&&mut Follower) -> bool {
+    move |follower| follower.affinity == Some(agent_id.player) && follower.power > 10
 }
 
 pub struct AreaPlugin;
@@ -207,7 +291,7 @@ fn render_area_ui(
                     let player_power = area.get_player_power(*player);
                     text.unwrap().sections[0].value = player_power.to_string();
                 } else if name.eq_ignore_ascii_case("Area Corrupted") {
-                    let player_corrupted = area.get_player_corrupted(*player);
+                    let player_corrupted = area.corrupted_followers(*player);
                     text.unwrap().sections[0].value = player_corrupted.to_string();
                 }
             }

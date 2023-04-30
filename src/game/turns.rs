@@ -19,7 +19,8 @@ impl TurnResults {
 pub fn apply_turns(
     season: i32,
     reporting_player: PlayerId,
-    turns: Vec<PlayerTurn>,
+    mut turns: Vec<PlayerTurn>,
+    seeds: Vec<u64>,
     world_areas: Vec<WorldArea>,
 ) -> TurnResults {
     let mut report = Vec::new();
@@ -29,6 +30,11 @@ pub fn apply_turns(
         agents.extend(area.agents.iter().map(|a| (a.id, a.clone())));
         new_world_areas.insert(area.world_position, area);
     }
+    turns.sort_by(|a, b| a.player_id.cmp(&b.player_id));
+    let mut rngs = seeds
+        .iter()
+        .map(|seed| StdRng::seed_from_u64(*seed))
+        .collect::<Vec<_>>();
 
     let moved_agents = move_agents(&turns, &mut new_world_areas);
     report.extend(moved_agents.iter().flat_map(|(x, y, agent_id)| {
@@ -46,29 +52,43 @@ pub fn apply_turns(
         }
     }));
 
-    let corruptions = corrupt_followers(&turns, &mut new_world_areas);
+    let corruptions = corrupt_followers(&turns, &mut rngs, &mut new_world_areas);
     report.extend(
         corruptions
             .iter()
-            .flat_map(|(x, y, agent_id, success_amount, fail_amount)| {
+            .flat_map(|(x, y, agent_id, success_amount, signs_seen)| {
                 if reporting_player == agent_id.player {
-                    Some(TurnReportEvent::AgentAction {
+                    let mut events = vec![TurnReportEvent::AgentAction {
                         location: (*x, *y),
                         location_name: new_world_areas[&(*x, *y)].name.clone(),
                         agent_name: agents[&agent_id].name.clone(),
                         action: AgentAction::Corrupt,
                         success_amount: *success_amount,
-                        fail_amount: *fail_amount,
-                    })
+                        fail_amount: *signs_seen,
+                    }];
+                    if *signs_seen > 0 {
+                        events.push(TurnReportEvent::SignSeen {
+                            location: (*x, *y),
+                            location_name: new_world_areas[&(*x, *y)].name.clone(),
+                            mine: true,
+                        });
+                    }
+                    events
+                } else if *signs_seen > 0 {
+                    vec![TurnReportEvent::SignSeen {
+                        location: (*x, *y),
+                        location_name: new_world_areas[&(*x, *y)].name.clone(),
+                        mine: false,
+                    }]
                 } else {
-                    None
+                    vec![]
                 }
             }),
     );
 
-    let converts = prostelytize_followers(&turns, &mut new_world_areas);
+    let (prostelyizes, converts) = prostelytize_followers(&turns, &mut rngs, &mut new_world_areas);
     report.extend(
-        converts
+        prostelyizes
             .iter()
             .flat_map(|(x, y, agent_id, success_amount, fail_amount)| {
                 if reporting_player == agent_id.player {
@@ -85,6 +105,67 @@ pub fn apply_turns(
                 }
             }),
     );
+
+    let sacrifices = single_action(
+        &turns,
+        &mut rngs,
+        &mut new_world_areas,
+        &|action| {
+            if let AgentAction::Sacrifice = action {
+                true
+            } else {
+                false
+            }
+        },
+        &|world_area: &mut WorldArea, agent_id, rng| world_area.sacrifice_followers(agent_id, rng),
+    );
+    report.extend(
+        sacrifices
+            .iter()
+            .flat_map(|(x, y, agent_id, success_amount, fail_amount)| {
+                if reporting_player == agent_id.player {
+                    Some(TurnReportEvent::AgentAction {
+                        location: (*x, *y),
+                        location_name: new_world_areas[&(*x, *y)].name.clone(),
+                        agent_name: agents[&agent_id].name.clone(),
+                        action: AgentAction::Sacrifice,
+                        success_amount: *success_amount,
+                        fail_amount: *fail_amount,
+                    })
+                } else if *fail_amount > 0 {
+                    Some(TurnReportEvent::Sacrificed {
+                        location: (*x, *y),
+                        location_name: new_world_areas[&(*x, *y)].name.clone(),
+                        follower: false,
+                    })
+                } else {
+                    None
+                }
+            }),
+    );
+
+    report.extend(sacrifices.iter().flat_map(|(x, y, agent_id, signs, _)| {
+        if *signs > 0 && reporting_player != agent_id.player {
+            Some(TurnReportEvent::SignSeen {
+                location: (*x, *y),
+                location_name: new_world_areas[&(*x, *y)].name.clone(),
+                mine: false,
+            })
+        } else {
+            None
+        }
+    }));
+
+    report.extend(converts.iter().flat_map(|(player, x, y)| {
+        if reporting_player == *player {
+            Some(TurnReportEvent::FollowersLost {
+                location: (*x, *y),
+                location_name: new_world_areas[&(*x, *y)].name.clone(),
+            })
+        } else {
+            None
+        }
+    }));
 
     if let Some(winner) = check_winners(&new_world_areas) {
         report.push(TurnReportEvent::GameOver {
@@ -147,10 +228,11 @@ fn move_agents(
 
 fn corrupt_followers(
     turns: &Vec<PlayerTurn>,
+    rngs: &mut Vec<StdRng>,
     world_areas: &mut HashMap<(u32, u32), WorldArea>,
 ) -> Vec<(u32, u32, AgentId, u32, u32)> {
     let mut results = Vec::new();
-    for turn in turns {
+    for (turn, rng) in turns.iter().zip(rngs.iter_mut()) {
         let corruption_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
             if let AgentAction::Corrupt = action {
                 Some(agent_id)
@@ -160,11 +242,38 @@ fn corrupt_followers(
         });
         for agent_id in corruption_actions {
             if let Some(source) = get_agent_location(&world_areas, *agent_id) {
-                let (success_amount, fail_amount) = world_areas
+                let (success_amount, signs_seen) = world_areas
                     .get_mut(&source)
                     .unwrap()
-                    .corrupt_followers(*agent_id);
-                results.push((source.0, source.1, *agent_id, success_amount, fail_amount));
+                    .corrupt_followers(*agent_id, rng);
+                results.push((source.0, source.1, *agent_id, success_amount, signs_seen));
+            }
+        }
+    }
+    results
+}
+
+fn single_action(
+    turns: &Vec<PlayerTurn>,
+    rngs: &mut Vec<StdRng>,
+    world_areas: &mut HashMap<(u32, u32), WorldArea>,
+    action_predicate: &dyn Fn(&AgentAction) -> bool,
+    action_fn: &dyn Fn(&mut WorldArea, AgentId, &mut StdRng) -> (u32, u32),
+) -> Vec<(u32, u32, AgentId, u32, u32)> {
+    let mut results = Vec::new();
+    for (turn, rng) in turns.iter().zip(rngs.iter_mut()) {
+        let acting_agents = turn.actions.iter().filter_map(|(agent_id, action)| {
+            if action_predicate(action) {
+                Some(agent_id)
+            } else {
+                None
+            }
+        });
+        for agent_id in acting_agents {
+            if let Some(source) = get_agent_location(&world_areas, *agent_id) {
+                let (success_amount, signs_seen) =
+                    action_fn(world_areas.get_mut(&source).unwrap(), *agent_id, rng);
+                results.push((source.0, source.1, *agent_id, success_amount, signs_seen));
             }
         }
     }
@@ -173,10 +282,15 @@ fn corrupt_followers(
 
 fn prostelytize_followers(
     turns: &Vec<PlayerTurn>,
+    rngs: &mut Vec<StdRng>,
     world_areas: &mut HashMap<(u32, u32), WorldArea>,
-) -> Vec<(u32, u32, AgentId, u32, u32)> {
+) -> (
+    Vec<(u32, u32, AgentId, u32, u32)>,
+    HashSet<(PlayerId, u32, u32)>,
+) {
     let mut results = Vec::new();
-    for turn in turns {
+    let mut converts: HashSet<(PlayerId, u32, u32)> = HashSet::new();
+    for (turn, rng) in turns.iter().zip(rngs.iter_mut()) {
         let corruption_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
             if let AgentAction::Prostelytize = action {
                 Some(agent_id)
@@ -191,9 +305,13 @@ fn prostelytize_followers(
                     let mut failures = 0;
                     while area.get_agent_stamina(*agent_id).unwrap_or_default() > 0 && failures == 0
                     {
-                        let (success_amount, fail_amount) = area.prostelytize_followers(*agent_id);
+                        let (success_amount, fail_amount, converted) =
+                            area.prostelytize_followers(*agent_id, rng);
                         successes += success_amount;
                         failures += fail_amount;
+                        if let Some(converted) = converted {
+                            converts.insert((converted, source.0, source.1));
+                        }
                         if success_amount == 0 && fail_amount == 0 {
                             break;
                         }
@@ -203,7 +321,7 @@ fn prostelytize_followers(
             }
         }
     }
-    results
+    (results, converts)
 }
 
 fn check_winners(world_areas: &HashMap<(u32, u32), WorldArea>) -> Option<PlayerId> {

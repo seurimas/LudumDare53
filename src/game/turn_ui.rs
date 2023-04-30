@@ -46,6 +46,10 @@ pub enum TurnReportEvent {
         location_name: String,
         mine: bool,
     },
+    FollowersLost {
+        location: (u32, u32),
+        location_name: String,
+    },
     GameOver {
         winner: PlayerId,
         scores: HashMap<PlayerId, u32>,
@@ -60,43 +64,33 @@ impl TurnReportEvent {
         match self {
             TurnReportEvent::GameStart { .. } => "Campaign Start".to_string(),
             TurnReportEvent::AgentAction {
-                location_name,
-                agent_name,
-                action,
-                ..
+                agent_name, action, ..
             } => match action {
-                AgentAction::Brutalize => format!("Brutality at {}", location_name),
-                AgentAction::Corrupt => format!("Corruption at {}", location_name),
-                AgentAction::Sacrifice => format!("Sacrifice at {}", location_name),
-                AgentAction::Prostelytize => format!("Prostelytizing at {}", location_name),
+                AgentAction::Brutalize => format!("Brutality"),
+                AgentAction::Corrupt => format!("Corruption"),
+                AgentAction::Sacrifice => format!("Sacrifice"),
+                AgentAction::Prostelytize => format!("Prostelytizing"),
                 AgentAction::Move(_, _, _) => {
-                    format!("{} arrived at {}", agent_name, location_name)
+                    format!("{} arrived", agent_name)
                 }
                 AgentAction::None => format!("???"),
             },
-            TurnReportEvent::Brutalized { location_name, .. } => {
-                format!("Violence erupts at {}!", location_name,)
+            TurnReportEvent::Brutalized { .. } => {
+                format!("Violence erupts!")
             }
-            TurnReportEvent::Sacrificed {
-                location_name,
-                follower,
-                ..
-            } => {
+            TurnReportEvent::FollowersLost { .. } => format!("Heretics!"),
+            TurnReportEvent::Sacrificed { follower, .. } => {
                 if *follower {
-                    format!("Follower sacrificed at {}!", location_name)
+                    format!("Follower sacrificed!")
                 } else {
-                    format!("Body found at {}!", location_name)
+                    format!("Body found!")
                 }
             }
-            TurnReportEvent::SignSeen {
-                location_name,
-                mine,
-                ..
-            } => {
+            TurnReportEvent::SignSeen { mine, .. } => {
                 if *mine {
-                    format!("Sign of Corruption at {}!", location_name)
+                    format!("Sign of Corruption!")
                 } else {
-                    format!("Strangeness at {}!", location_name)
+                    format!("Strangeness!")
                 }
             }
             TurnReportEvent::GameOver { winner, .. } => format!("Game Over"),
@@ -120,26 +114,58 @@ impl TurnReportEvent {
             } => match action {
                 AgentAction::Brutalize => vec![
                     format!(
-                        "{} arrived at {} and brutalized the locals.\n",
+                        "{} brutalized the locals at {}.\n",
                         agent_name, location_name
                     ),
-                    format!("{} locals were killed or forced to flee.\n", fail_amount),
+                    format!("{} locals were killed or\nforced to flee.\n", fail_amount),
                     format!("{} followers were gained.\n", success_amount),
                 ],
-                AgentAction::Corrupt => vec![format!(
-                    "{} arrived at {} and corrupted the locals.",
-                    agent_name, location_name
-                )],
-                AgentAction::Sacrifice => vec![format!(
-                    "{} arrived at {} and sacrificed a follower.",
-                    agent_name, location_name
-                )],
-                AgentAction::Prostelytize => vec![format!(
-                    "{} arrived at {} and converted the locals.",
-                    agent_name, location_name
-                )],
+                AgentAction::Corrupt => vec![
+                    format!(
+                        "{} enacted a corruption ritual at {}.\n",
+                        agent_name, location_name
+                    ),
+                    if *success_amount > 0 {
+                        format!("Your ritual succeded.\nAfollower is now corrupted.\nYour power at {} grows.", location_name)
+                    } else {
+                        format!(
+                            "Your ritual failed.\nYour power at {} wanes.",
+                            location_name
+                        )
+                    },
+                    if *fail_amount > 0 {
+                        format!("Something wondrous happened...\n")
+                    } else {
+                        format!("You have a new corrupted follower.\n")
+                    },
+                ],
+                AgentAction::Sacrifice => vec![
+                    format!(
+                        "{} sacrificed a follower at {}.\n\n",
+                        agent_name, location_name
+                    ),
+                    {
+                        if *success_amount > 0 {
+                            format!("Your sacrifice has brought untold power!\n")
+                        } else {
+                            format!("Your ritual failed.")
+                        }
+                    },
+                    {
+                        if *fail_amount > 0 {
+                            format!("Your power at {} wanes with this failure.\n", location_name)
+                        } else {
+                            format!("")
+                        }
+                    },
+                ],
+                AgentAction::Prostelytize => vec![
+                    format!("{} has heard the darkness.\n\n", location_name),
+                    format!("{} followers were gained.\n", success_amount),
+                    format!("{} were too strong to convert, yet.\n", fail_amount),
+                ],
                 AgentAction::Move(_, _, _) => {
-                    vec![format!("{} arrived at {}.", agent_name, location_name)]
+                    vec![format!("{} arrived at\n{}", agent_name, location_name)]
                 }
                 AgentAction::None => vec![format!("???")],
             },
@@ -163,6 +189,10 @@ impl TurnReportEvent {
                     vec![format!("A sacrifice was made at {}.", location_name)]
                 }
             }
+            TurnReportEvent::FollowersLost { location_name, .. } => vec![format!(
+                "Your followers are being swayed by heretical ideas at {}.",
+                location_name
+            )],
             TurnReportEvent::SignSeen {
                 location_name,
                 mine,
@@ -174,7 +204,10 @@ impl TurnReportEvent {
                         location_name
                     )]
                 } else {
-                    vec![format!("Something strange was seen at {}.", location_name)]
+                    vec![format!(
+                        "The heretics at {} have discovered something...",
+                        location_name
+                    )]
                 }
             }
             TurnReportEvent::GameOver { winner, scores } => vec![format!(
@@ -243,7 +276,7 @@ fn view_turn_report(
         } else if keyboard.just_pressed(KeyCode::Escape) {
             // Close the turn report.
             println!("Closing turn report.");
-            turn_report.event_id = None;
+            event_id = turn_report.events.len() as u32;
         }
         turn_report.event_id = Some(event_id);
         if event_id >= turn_report.events.len() as u32 {
