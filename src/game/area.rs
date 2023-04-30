@@ -132,8 +132,7 @@ impl WorldArea {
         self.agents
             .iter()
             .filter(|a| a.id.player == player)
-            .skip(agent)
-            .next()
+            .nth(agent)
     }
 
     pub fn get_unassigned_player_agent(&self, player_turn: &PlayerTurn) -> Option<usize> {

@@ -151,7 +151,9 @@ fn map_mouse_system(
         }
         return;
     }
+    println!("Mouse location: {:?}", mouse_location_timer.0);
     if let Some((x, y)) = get_tile_at_screen_pos(mouse_location_timer.0, camera) {
+        println!("Mouse tile: ({}, {})", x, y);
         for (mut map_tile, m_area) in tile_query.iter_mut() {
             if map_tile.x == x && map_tile.y == y {
                 if m_area.is_some()
@@ -198,7 +200,7 @@ pub fn get_tile_at_screen_pos(
         let (sx, sy) = (mouse_world_location.origin.x, mouse_world_location.origin.y);
         let x = sx / TILE_SIZE + sy / (TILE_SIZE / 2.);
         let y = sx / TILE_SIZE - sy / (TILE_SIZE / 2.);
-        if x >= 0. && y >= 0. {
+        if x.round() >= 0. && y.round() >= 0. {
             Some((x.round() as usize, y.round() as usize))
         } else {
             None

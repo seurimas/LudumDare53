@@ -23,6 +23,13 @@ pub struct MyAssets {
     pub tile_hover: Handle<AudioSource>,
     #[asset(path = "tile_click.wav")]
     pub tile_click: Handle<AudioSource>,
+    #[asset(path = "EvokeDarkness.wav")]
+    pub evoke_darkness: Handle<AudioSource>,
+    #[asset(
+        paths("Brutalize.wav", "Prostelytize.wav", "Sacrifice.wav"),
+        collection(typed, mapped)
+    )]
+    pub action_stings: HashMap<String, Handle<AudioSource>>,
     #[asset(
         paths(
             "Move.png",

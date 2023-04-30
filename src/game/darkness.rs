@@ -125,6 +125,8 @@ fn evoke_darkness_on_click(
     >,
     mut tiles: Query<&mut MapTile>,
     mut evoking_ui: Query<&mut Visibility, With<EvokingUi>>,
+    my_assets: Res<MyAssets>,
+    audio: Res<Audio>,
 ) {
     if let Some(interaction) = interaction_query.iter_mut().next() {
         if *interaction == Interaction::Clicked {
@@ -137,6 +139,7 @@ fn evoke_darkness_on_click(
                 tile.hovered = false;
                 tile.selected = false;
             }
+            audio.play(my_assets.evoke_darkness.clone());
         }
     }
 }

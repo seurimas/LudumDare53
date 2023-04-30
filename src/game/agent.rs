@@ -37,6 +37,15 @@ impl AgentAction {
         }
     }
 
+    pub fn sting(&self) -> &'static str {
+        match self {
+            AgentAction::Brutalize => "Brutalize.wav",
+            AgentAction::Prostelytize => "Prostelytize.wav",
+            AgentAction::Sacrifice => "Sacrifice.wav",
+            _ => "",
+        }
+    }
+
     pub fn check_sum(&self) -> u32 {
         match self {
             AgentAction::None => 0,
@@ -138,23 +147,24 @@ fn render_agent_ui(
     action_query: Query<&AgentAction>,
     mut image_query: Query<(Entity, &ActiveInactiveImages, &mut UiImage)>,
     mut interaction_query: Query<(Entity, &Interaction), (Changed<Interaction>, With<Button>)>,
+    assets: Res<MyAssets>,
+    audio: Res<Audio>,
 ) {
-    let AgentUiState {
-        x,
-        y,
-        agent_idx,
-        tooltip_control,
-    } = *local;
     let mut tooltip_value = None;
     if let Some((tile, world_area)) = map_query.iter().find(|(tile, _)| tile.selected) {
-        if x != tile.x || y != tile.y {
+        if local.x != tile.x || local.y != tile.y {
             local.x = tile.x;
             local.y = tile.y;
             local.agent_idx = world_area
                 .get_unassigned_player_agent(&player_turn)
                 .unwrap_or(0);
+            println!(
+                "Showing agent {} {:?}",
+                local.agent_idx,
+                world_area.get_unassigned_player_agent(&player_turn)
+            );
         }
-        if let Some(active_agent) = world_area.get_nth_player_agent(*player_id, agent_idx) {
+        if let Some(active_agent) = world_area.get_nth_player_agent(*player_id, local.agent_idx) {
             for (entity, name, mut text, rcp, mut visibility) in ui_query.iter_mut() {
                 if let Some(name) = name {
                     if name.eq_ignore_ascii_case("Agent") {
@@ -169,6 +179,8 @@ fn render_agent_ui(
                         } else {
                             text.unwrap().sections[0].value = "No".to_string();
                         }
+                    } else if name.eq_ignore_ascii_case("Area Agent") {
+                        *visibility = Visibility::Visible;
                     }
                 } else if let Ok(action) = action_query.get(entity) {
                     if rcp.map(|rcp| rcp.mouse_over()).unwrap_or_default() {
@@ -181,6 +193,9 @@ fn render_agent_ui(
                     Interaction::Clicked => {
                         if let Ok(action) = action_query.get(entity) {
                             player_turn.set_action(active_agent.id, *action);
+                            if let Some(sound) = assets.action_stings.get(action.sting()) {
+                                audio.play(sound.clone());
+                            }
                         }
                     }
                     _ => {}
