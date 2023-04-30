@@ -20,7 +20,7 @@ pub fn apply_turns(
     season: i32,
     reporting_player: PlayerId,
     mut turns: Vec<PlayerTurn>,
-    seeds: Vec<u64>,
+    mut seeds: Vec<u64>,
     world_areas: Vec<WorldArea>,
 ) -> TurnResults {
     let mut report = Vec::new();
@@ -30,7 +30,10 @@ pub fn apply_turns(
         agents.extend(area.agents.iter().map(|a| (a.id, a.clone())));
         new_world_areas.insert(area.world_position, area);
     }
+    // We just want a consistent arrangement. Seeds don't have to match their original players.
     turns.sort_by(|a, b| a.player_id.cmp(&b.player_id));
+    seeds.sort();
+    println!("turns: {:?} seeds: {:?}", turns, seeds);
     let mut rngs = seeds
         .iter()
         .map(|seed| StdRng::seed_from_u64(*seed))
@@ -346,7 +349,7 @@ fn corrupt_followers(
                 }
             })
             .collect::<Vec<_>>();
-        corruption_actions.sort_by(|a, b| a.player.cmp(&b.player));
+        corruption_actions.sort_by(|a, b| a.cmp(&b));
         for agent_id in corruption_actions {
             if let Some(source) = get_agent_location(&world_areas, *agent_id) {
                 let (success_amount, signs_seen) = world_areas
@@ -369,13 +372,18 @@ fn single_action(
 ) -> Vec<(u32, u32, AgentId, u32, u32)> {
     let mut results = Vec::new();
     for (turn, rng) in turns.iter().zip(rngs.iter_mut()) {
-        let acting_agents = turn.actions.iter().filter_map(|(agent_id, action)| {
-            if action_predicate(action) {
-                Some(agent_id)
-            } else {
-                None
-            }
-        });
+        let mut acting_agents = turn
+            .actions
+            .iter()
+            .filter_map(|(agent_id, action)| {
+                if action_predicate(action) {
+                    Some(agent_id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        acting_agents.sort_by(|a, b| a.cmp(&b));
         for agent_id in acting_agents {
             if let Some(source) = get_agent_location(&world_areas, *agent_id) {
                 let (success_amount, signs_seen) =
@@ -398,13 +406,18 @@ fn prostelytize_followers(
     let mut results = Vec::new();
     let mut converts: HashSet<(PlayerId, u32, u32)> = HashSet::new();
     for (turn, rng) in turns.iter().zip(rngs.iter_mut()) {
-        let corruption_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
-            if let AgentAction::Prostelytize = action {
-                Some(agent_id)
-            } else {
-                None
-            }
-        });
+        let mut corruption_actions = turn
+            .actions
+            .iter()
+            .filter_map(|(agent_id, action)| {
+                if let AgentAction::Prostelytize = action {
+                    Some(agent_id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        corruption_actions.sort_by(|a, b| a.cmp(&b));
         for agent_id in corruption_actions {
             if let Some(source) = get_agent_location(&world_areas, *agent_id) {
                 if let Some(area) = world_areas.get_mut(&source) {

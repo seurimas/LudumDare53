@@ -91,7 +91,7 @@ impl TurnReportEvent {
                 if *mine {
                     format!("Sign of Corruption!")
                 } else {
-                    format!("Strangeness!")
+                    format!("Sign of Corruption!")
                 }
             }
             TurnReportEvent::GameOver { winner, .. } => format!("Game Over"),
@@ -247,7 +247,7 @@ impl TurnReportEvent {
             } => {
                 if *mine {
                     vec![format!(
-                        "A sign of corruption was seen at {}.",
+                        "You discovered a Sign of Corruption at {}!\n\nThe coming darkness is nearer!",
                         location_name
                     )]
                 } else {

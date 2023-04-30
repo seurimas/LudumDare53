@@ -83,7 +83,9 @@ impl AgentAction {
                 }
             }
             AgentAction::CorruptAgent => {
-                if area.corrupted_followers(agent.id.player) == 0 {
+                if agent.corrupted {
+                    Some(format!("{} is already corrupted.", agent.name))
+                } else if area.corrupted_followers(agent.id.player) == 0 {
                     Some(HIDE_BUTTON.to_string())
                 } else if area.get_possible_sign_holder_count(agent.id) > 0 {
                     Some(format!(

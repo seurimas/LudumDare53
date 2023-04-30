@@ -402,11 +402,12 @@ fn watch_for_players(
         } else if *element == MainMenuElement::ConfirmPlayers
             && *interaction == Interaction::Clicked
         {
-            let players: Vec<String> = menu_state
+            let mut players: Vec<String> = menu_state
                 .players
                 .iter()
                 .map(|joiner| joiner.name.to_string())
                 .collect();
+            players.sort();
             let game_players = GamePlayers::new(players.clone(), menu_state.ai);
             let my_player: PlayerId = game_players
                 .iter()

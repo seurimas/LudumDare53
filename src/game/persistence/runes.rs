@@ -135,4 +135,13 @@ mod runes_tests {
             "ᚠᛁᚢᚠᚠᛁᚢᚠᚠᛁᚢᚠ"
         );
     }
+
+    #[test]
+    fn test_retrieve_evokation() {
+        use crate::game::darkness::Evokation;
+        let runes = "ᛜᚱᛉᚩᚡᛊᛞᛗᚲᚫᛞᚾᚾᛚᚹᚠᚢᚠᚢᚦᚠᚠᚺᚠᚢᚡᚠᚱᛏᚠᚺᚠᚦᚺᚠᚦᚠᚢᚺᚠ";
+        let evokation = parse_runes(runes, true);
+        let evokation: Evokation = postcard::from_bytes(&evokation).unwrap();
+        assert_eq!(evokation.seed, 16729024516283669525);
+    }
 }

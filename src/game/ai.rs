@@ -90,6 +90,9 @@ fn ai_turn(
                     if game_players.is_ai(player) && !evoked.contains_key(&player) {
                         let mut rng = get_ai_rng(&game_players, player, &ai_seeds);
                         let ai_turn = take_turn(player, &mut rng, &world_areas);
+                        // let mut debug = ai_turn.actions.iter().collect::<Vec<_>>();
+                        // debug.sort_by(|a, b| a.0.cmp(&b.0));
+                        // println!("AI {:?} turn: {:?}", player, debug);
                         evokation = Some((*season, rng.gen(), ai_turn))
                     }
                 }

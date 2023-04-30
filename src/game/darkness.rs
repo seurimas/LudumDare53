@@ -159,17 +159,12 @@ impl EvokingState {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Evokation {
-    pub seed: u64,
+    seed: u64,
     pub player_turn: PlayerTurn,
     pub season: i32,
 }
 
 impl Evokation {
-    pub fn new(season: i32, player_turn: PlayerTurn) -> Self {
-        let seed = rand::thread_rng().gen();
-        Self::with_seed(season, player_turn, seed)
-    }
-
     pub fn with_seed(season: i32, player_turn: PlayerTurn, seed: u64) -> Self {
         Self {
             seed,
@@ -183,6 +178,7 @@ impl Evokation {
     }
 
     pub fn store_evokation(&self, futhark: bool) -> Option<String> {
+        println!("Storing with seed: {}", self.seed);
         store_in_runes(self, futhark)
     }
 
@@ -210,9 +206,14 @@ fn evoke_darkness_on_click(
     audio: Res<Audio>,
 ) {
     if let Some(interaction) = interaction_query.iter_mut().next() {
-        if *interaction == Interaction::Clicked {
+        if *interaction == Interaction::Clicked
+            && matches!(*evoking_state, EvokingState::None { .. })
+        {
             evoking_state.begin(**season, player_turn.clone(), game_players.as_ref());
-            Evokation::new(**season, player_turn.clone()).store_evokation(true);
+            evoking_state
+                .get_evokation(&player_turn.player_id)
+                .unwrap()
+                .store_evokation(false);
             for mut visibility in evoking_ui.iter_mut() {
                 *visibility = Visibility::Visible;
             }
@@ -241,8 +242,15 @@ fn watch_evokations(
         *cooldown = 3.;
         match Evokation::retrieve_evokation() {
             Ok(evokation) => {
+                let player = evokation.player_turn.player_id;
                 if evoking_state.push(evokation.season, evokation.seed, evokation.player_turn) {
+                    println!(
+                        "Received evokation for {:?} with seed {}",
+                        player, evokation.seed
+                    );
                     audio.play(my_assets.evoke_darkness.clone());
+                } else {
+                    println!("Could not push evokation for {:?}", player);
                 }
             }
             Err(err) => {
@@ -323,6 +331,7 @@ fn end_evokation(
             .iter()
             .map(|world_area| world_area.clone())
             .collect::<Vec<WorldArea>>();
+        // println!("{:?} {:?} {:?} {:?}", turns, seeds, world_areas, player_id);
         let results = apply_turns(
             **season,
             *player_id,
