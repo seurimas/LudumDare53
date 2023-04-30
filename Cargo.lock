@@ -2090,6 +2090,7 @@ dependencies = [
  "rand_pcg",
  "ron",
  "serde",
+ "serde_json",
  "unicode-segmentation",
 ]
 

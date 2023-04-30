@@ -21,9 +21,12 @@ impl Plugin for DarknessPlugin {
 
 #[derive(Resource)]
 pub enum EvokingState {
-    None,
+    None {
+        last_evokation: Option<Evokation>,
+    },
     Evoking {
-        evoked: HashMap<PlayerId, (u64, PlayerTurn)>,
+        evoked: HashMap<PlayerId, Evokation>,
+        unevoked: HashSet<PlayerId>,
     },
     Ready {
         turns: Vec<PlayerTurn>,
@@ -33,35 +36,68 @@ pub enum EvokingState {
 
 impl Default for EvokingState {
     fn default() -> Self {
-        Self::None
+        Self::None {
+            last_evokation: None,
+        }
     }
 }
 
 impl EvokingState {
-    pub fn begin(&mut self, player_turn: PlayerTurn) {
+    pub fn begin(&mut self, player_turn: PlayerTurn, players: &GamePlayers) {
         let mut evoked = HashMap::new();
+        let unevoked = players
+            .iter()
+            .enumerate()
+            .filter(|player| player.0 as u32 != player_turn.player_id.0)
+            .map(|player| PlayerId(player.0 as u32))
+            .collect();
         evoked.insert(
             player_turn.player_id,
-            (rand::thread_rng().gen(), player_turn),
+            Evokation::with_seed(player_turn, rand::thread_rng().gen()),
         );
-        *self = Self::Evoking { evoked };
+        *self = Self::Evoking { evoked, unevoked };
     }
 
-    pub fn push(&mut self, turn_seed: u64, player_turn: PlayerTurn) {
-        if let Self::Evoking { evoked } = self {
-            evoked.insert(player_turn.player_id, (turn_seed, player_turn));
+    pub fn get_player_states(&self) -> Vec<(PlayerId, bool)> {
+        let mut states = match self {
+            Self::Evoking { evoked, unevoked } => evoked
+                .keys()
+                .map(|player| (*player, true))
+                .chain(unevoked.iter().map(|player| (*player, false)))
+                .collect(),
+            _ => Vec::new(),
+        };
+        states.sort_by(|(player_a, _), (player_b, _)| player_a.cmp(player_b));
+        states
+    }
+
+    pub fn push(&mut self, turn_seed: u64, player_turn: PlayerTurn) -> bool {
+        if let Self::Evoking { evoked, unevoked } = self {
+            if unevoked.remove(&player_turn.player_id) {
+                evoked.insert(
+                    player_turn.player_id,
+                    Evokation::with_seed(player_turn, turn_seed),
+                );
+                true
+            } else {
+                println!("Player {:?} already evoked", player_turn.player_id);
+                false
+            }
+        } else {
+            false
         }
     }
 
     pub fn check(&mut self, players: &GamePlayers) {
         match self {
-            Self::Evoking { evoked } => {
+            Self::Evoking { evoked, .. } => {
                 if evoked.len() == players.len() {
                     let mut turns = Vec::new();
                     let mut seeds = Vec::new();
-                    for player in players.iter() {
-                        let (seed, turn) = evoked.remove(&player.0).unwrap();
-                        turns.push(turn);
+                    for player in players.iter().enumerate() {
+                        let Evokation { seed, player_turn } =
+                            evoked.remove(&PlayerId(player.0 as u32)).unwrap();
+                        turns.push(player_turn);
                         seeds.push(seed);
                     }
                     *self = Self::Ready { turns, seeds };
@@ -70,51 +106,52 @@ impl EvokingState {
             _ => {}
         }
     }
+
+    pub fn get_evokation(&self, player: &PlayerId) -> Option<Evokation> {
+        match self {
+            Self::Evoking { evoked, .. } => evoked.get(player).cloned(),
+            Self::None { last_evokation } => last_evokation.clone(),
+            _ => None,
+        }
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Evokation {
     pub seed: u64,
     pub player_turn: PlayerTurn,
-    pub check_sum: u32,
 }
 
 impl Evokation {
     pub fn new(player_turn: PlayerTurn) -> Self {
         let seed = rand::thread_rng().gen();
-        let check_sum = player_turn
-            .actions
-            .iter()
-            .fold(0, |acc, (_, action)| acc ^ action.check_sum())
-            ^ seed as u32;
+        Self::with_seed(player_turn, seed)
+    }
+
+    pub fn with_seed(player_turn: PlayerTurn, seed: u64) -> Self {
         Self {
             seed,
-            player_turn,
-            check_sum,
+            player_turn: player_turn.clone(),
         }
     }
 
-    pub fn is_valid(&self) -> bool {
-        self.check_sum
-            == self
-                .player_turn
-                .actions
-                .iter()
-                .fold(0, |acc, (_, action)| acc ^ action.check_sum())
-    }
-
-    pub fn retrieve_evokation() -> Option<Evokation> {
-        retrieve_from_runes::<Evokation>().filter(|evokation: &Evokation| evokation.is_valid())
+    pub fn retrieve_evokation() -> Result<Evokation, String> {
+        retrieve_from_runes::<Evokation>()
     }
 
     pub fn store_evokation(&self, futhark: bool) -> Option<String> {
         store_in_runes(self, futhark)
+    }
+
+    pub fn to_runes(&self, futhark: bool) -> String {
+        create_runes(self, futhark)
     }
 }
 
 fn evoke_darkness_on_click(
     mut evoking_state: ResMut<EvokingState>,
     player_turn: Res<PlayerTurn>,
+    game_players: Res<GamePlayers>,
     mut interaction_query: Query<
         &Interaction,
         (
@@ -130,7 +167,7 @@ fn evoke_darkness_on_click(
 ) {
     if let Some(interaction) = interaction_query.iter_mut().next() {
         if *interaction == Interaction::Clicked {
-            evoking_state.begin(player_turn.clone());
+            evoking_state.begin(player_turn.clone(), game_players.as_ref());
             Evokation::new(player_turn.clone()).store_evokation(true);
             for mut visibility in evoking_ui.iter_mut() {
                 *visibility = Visibility::Visible;
@@ -144,9 +181,71 @@ fn evoke_darkness_on_click(
     }
 }
 
-fn watch_evokations(mut evoking_state: ResMut<EvokingState>) {
-    if let Some(evokation) = Evokation::retrieve_evokation() {
-        evoking_state.push(evokation.seed, evokation.player_turn);
+fn watch_evokations(
+    mut cooldown: Local<f32>,
+    time: Res<Time>,
+    mut evoking_state: ResMut<EvokingState>,
+    game_players: Res<GamePlayers>,
+    player_id: Res<PlayerId>,
+    keyboard: Res<Input<KeyCode>>,
+    my_assets: Res<MyAssets>,
+    audio: Res<Audio>,
+    mut player_list: Query<&mut Text, With<EvokingPlayerList>>,
+) {
+    if *cooldown < 0. {
+        println!("Checking evokations");
+        *cooldown = 3.;
+        match Evokation::retrieve_evokation() {
+            Ok(evokation) => {
+                if evoking_state.push(evokation.seed, evokation.player_turn) {
+                    audio.play(my_assets.evoke_darkness.clone());
+                }
+            }
+            Err(err) => {
+                println!("Could not retrieve evokation: {}", err);
+            }
+        }
+    } else {
+        *cooldown -= time.delta_seconds();
+    }
+    if keyboard.just_pressed(KeyCode::C) {
+        if let Some(evokation) = evoking_state.get_evokation(&player_id) {
+            evokation.store_evokation(true);
+            audio.play(my_assets.evoke_darkness.clone());
+        }
+    }
+    match evoking_state.as_ref() {
+        EvokingState::Evoking { .. } => {
+            let player_states = evoking_state.get_player_states();
+            let mut player_list = player_list.single_mut();
+            player_list.sections = player_states
+                .iter()
+                .map(|(player, state)| {
+                    let color = if *state { Color::GREEN } else { Color::RED };
+                    TextSection {
+                        value: format!("{}\n", game_players.get_name(*player).unwrap()),
+                        style: TextStyle {
+                            font: my_assets.font.clone(),
+                            font_size: 20.0,
+                            color,
+                        },
+                    }
+                })
+                .collect();
+        }
+        EvokingState::Ready { .. } => {
+            for mut text in player_list.iter_mut() {
+                text.sections = vec![TextSection {
+                    value: "Evokation ready".to_string(),
+                    style: TextStyle {
+                        font: my_assets.font.clone(),
+                        font_size: 20.0,
+                        color: Color::WHITE,
+                    },
+                }]
+            }
+        }
+        _ => {}
     }
 }
 
@@ -162,6 +261,7 @@ fn end_evokation(
     tile_query: Query<(Entity, &MapTile)>,
     mut evoking_ui: Query<&mut Visibility, With<EvokingUi>>,
 ) {
+    let last_evokation = evoking_state.get_evokation(&player_id);
     evoking_state.check(&game_players);
     if let EvokingState::Ready { turns, seeds } = evoking_state.as_ref() {
         let world_areas = query
@@ -177,7 +277,9 @@ fn end_evokation(
         );
         println!("{:?}", results.report);
         for (entity, map_tile) in tile_query.iter() {
-            if let Some(new_world_area) = results.get_new_world_area((map_tile.x, map_tile.y)) {
+            if let Some(new_world_area) =
+                results.get_new_world_area((map_tile.x as u32, map_tile.y as u32))
+            {
                 commands.entity(entity).insert(new_world_area);
             } else if query.contains(entity) {
                 commands.entity(entity).remove::<WorldArea>();
@@ -186,7 +288,7 @@ fn end_evokation(
         *turn_report = TurnReport::new(results.report);
         player_turn.reset();
         **season = **season + 1;
-        *evoking_state = EvokingState::None;
+        *evoking_state = EvokingState::None { last_evokation };
         for mut visibility in evoking_ui.iter_mut() {
             *visibility = Visibility::Hidden;
         }
@@ -195,6 +297,9 @@ fn end_evokation(
 
 #[derive(Component)]
 struct EvokingUi;
+
+#[derive(Component)]
+struct EvokingPlayerList;
 
 fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
     // Center me.
@@ -262,21 +367,28 @@ fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
                             },
                             text: Text::from_sections(
                                 vec![TextSection {
-                                    value: "You have evoked the darkness on the third full moon of the season.\n".to_string(),
+                                    value: "You have evoked the darkness\non the third full moon of the season.\n".to_string(),
                                     style: TextStyle {
                                         font: assets.font.clone(),
                                         font_size: FONT_SIZE,
                                         color: Color::WHITE,
                                     },
                                 }, TextSection {
-                                    value: "You receive a runic script in your mind.\n\n".to_string(),
+                                    value: "You receive a runic script in your mind.\n".to_string(),
                                     style: TextStyle {
                                         font: assets.font.clone(),
                                         font_size: FONT_SIZE,
                                         color: Color::WHITE,
                                     },
                                 }, TextSection {
-                                    value: "Press <C> to copy the script again.".to_string(),
+                                    value: "(Check your clipboard)\n\n".to_string(),
+                                    style: TextStyle {
+                                        font: assets.font.clone(),
+                                        font_size: FONT_SIZE,
+                                        color: Color::WHITE,
+                                    },
+                                }, TextSection {
+                                    value: "Press <C> to copy the script again.\n".to_string(),
                                     style: TextStyle {
                                         font: assets.font.clone(),
                                         font_size: FONT_SIZE,
@@ -300,6 +412,7 @@ fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
                             ),
                             ..default()
                         },
+                        EvokingPlayerList,
                         Name::new("evoking_waiting"),
                     ));
                 });

@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use crate::prelude::*;
+use crate::{game::WIN_SIGN_COUNT, prelude::*};
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MapDesc {
@@ -44,42 +44,44 @@ fn generate_village_name(rng: &mut StdRng) -> String {
         0 => {
             format!(
                 "The {} {} {}",
-                choose(rng, &ADVERBS),
-                choose(rng, &ADJECTIVES),
-                choose(rng, &VILLAGE_NOUNS)
+                choose(rng, &ADVERBS).unwrap(),
+                choose(rng, &ADJECTIVES).unwrap(),
+                choose(rng, &VILLAGE_NOUNS).unwrap()
             )
         }
         1 => {
             format!(
                 "{} {} of the {}",
-                choose(rng, &ADVERBS),
-                choose(rng, &ADJECTIVES),
-                choose(rng, &VILLAGE_NOUNS)
+                choose(rng, &ADVERBS).unwrap(),
+                choose(rng, &ADJECTIVES).unwrap(),
+                choose(rng, &VILLAGE_NOUNS).unwrap()
             )
         }
         1 => {
             format!(
                 "{} of {}",
-                choose(rng, &VILLAGE_NOUNS),
-                choose(rng, &ADJECTIVES)
+                choose(rng, &VILLAGE_NOUNS).unwrap(),
+                choose(rng, &ADJECTIVES).unwrap()
             )
         }
         2 => {
             format!(
                 "{} {}",
-                choose(rng, &ADJECTIVES),
-                choose(rng, &VILLAGE_NOUNS)
+                choose(rng, &ADJECTIVES).unwrap(),
+                choose(rng, &VILLAGE_NOUNS).unwrap()
             )
         }
-        3 => {
-            format!("{} {}", choose(rng, &ADVERBS), choose(rng, &VILLAGE_NOUNS))
-        }
+        3 => format!(
+            "{} {}",
+            choose(rng, &ADVERBS).unwrap(),
+            choose(rng, &VILLAGE_NOUNS).unwrap()
+        ),
         4 => {
             format!(
                 "{} {} {}",
-                choose(rng, &ADVERBS),
-                choose(rng, &ADVERBS),
-                choose(rng, &VILLAGE_NOUNS)
+                choose(rng, &ADVERBS).unwrap(),
+                choose(rng, &ADVERBS).unwrap(),
+                choose(rng, &VILLAGE_NOUNS).unwrap()
             )
         }
         idx => panic!("Bad village template {}", idx),
@@ -91,38 +93,46 @@ fn generate_city_name(rng: &mut StdRng) -> String {
         0 => {
             format!(
                 "The {} {} {}",
-                choose(rng, &ADVERBS),
-                choose(rng, &ADJECTIVES),
-                choose(rng, &CITY_NOUNS)
+                choose(rng, &ADVERBS).unwrap(),
+                choose(rng, &ADJECTIVES).unwrap(),
+                choose(rng, &CITY_NOUNS).unwrap()
             )
         }
         1 => {
             format!(
                 "{} {} of the {}",
-                choose(rng, &ADVERBS),
-                choose(rng, &ADJECTIVES),
-                choose(rng, &CITY_NOUNS)
+                choose(rng, &ADVERBS).unwrap(),
+                choose(rng, &ADJECTIVES).unwrap(),
+                choose(rng, &CITY_NOUNS).unwrap()
             )
         }
         1 => {
             format!(
                 "{} of {}",
-                choose(rng, &CITY_NOUNS),
-                choose(rng, &ADJECTIVES)
+                choose(rng, &CITY_NOUNS).unwrap(),
+                choose(rng, &ADJECTIVES).unwrap()
             )
         }
         2 => {
-            format!("{} {}", choose(rng, &ADJECTIVES), choose(rng, &CITY_NOUNS))
+            format!(
+                "{} {}",
+                choose(rng, &ADJECTIVES).unwrap(),
+                choose(rng, &CITY_NOUNS).unwrap()
+            )
         }
         3 => {
-            format!("{} {}", choose(rng, &ADVERBS), choose(rng, &CITY_NOUNS))
+            format!(
+                "{} {}",
+                choose(rng, &ADVERBS).unwrap(),
+                choose(rng, &CITY_NOUNS).unwrap()
+            )
         }
         4 => {
             format!(
                 "{} {} {}",
-                choose(rng, &ADVERBS),
-                choose(rng, &ADVERBS),
-                choose(rng, &CITY_NOUNS)
+                choose(rng, &ADVERBS).unwrap(),
+                choose(rng, &ADVERBS).unwrap(),
+                choose(rng, &CITY_NOUNS).unwrap()
             )
         }
         idx => panic!("Bad city template {}", idx),
@@ -143,8 +153,8 @@ fn generate_city_population(rng: &mut StdRng, area: &mut WorldArea) {
     for _ in 0..lower_class {
         area.followers.push(Follower::new(rng.gen_range(1..10)));
     }
-    for _ in 0..rng.gen_range(2..=3) {
-        let sign_holder = choose_mut(rng, &mut area.followers);
+    for _ in 0..rng.gen_range(1..=3) {
+        let sign_holder = choose_mut(rng, &mut area.followers).unwrap();
         sign_holder.sign_holder = true;
         sign_holder.power += 10;
     }
@@ -160,8 +170,8 @@ fn generate_village_population(rng: &mut StdRng, area: &mut WorldArea) {
     for _ in 0..lower_class {
         area.followers.push(Follower::new(rng.gen_range(1..10)));
     }
-    for _ in 0..rng.gen_range(2..=3) {
-        let sign_holder = choose_mut(rng, &mut area.followers);
+    for _ in 0..rng.gen_range(1..=2) {
+        let sign_holder = choose_mut(rng, &mut area.followers).unwrap();
         sign_holder.sign_holder = true;
         sign_holder.power += 15;
     }
@@ -178,7 +188,11 @@ const SUFFIX: [&str; 16] = [
 ];
 
 fn generate_agent_name(rng: &mut StdRng) -> String {
-    format!("{}{}", choose(rng, &PREFIX), choose(rng, &SUFFIX))
+    format!(
+        "{}{}",
+        choose(rng, &PREFIX).unwrap(),
+        choose(rng, &SUFFIX).unwrap()
+    )
 }
 
 fn generate_area(rng: &mut StdRng, x: u32, y: u32, tile: u32) -> Option<WorldArea> {
@@ -230,7 +244,10 @@ pub fn generate_map(mut players: Vec<PlayerId>) -> MapDesc {
     let height = rng.gen_range(7..=10);
     let mut tiles = vec![0; width * height];
     let mut areas = Vec::new();
-    let population_count = rng.gen_range((players.len() * 12)..(players.len() * 18));
+    let min_per_player = WIN_SIGN_COUNT as usize + 2;
+    let max_per_player = min_per_player as usize + 2;
+    let population_count =
+        rng.gen_range((players.len() * min_per_player)..(players.len() * max_per_player));
     println!("Population count: {}", population_count);
     for _ in 0..population_count {
         let x = rng.gen_range(0..width);
@@ -260,10 +277,10 @@ pub fn generate_map(mut players: Vec<PlayerId>) -> MapDesc {
         .collect::<Vec<(u32, u32)>>();
     for player in players.iter() {
         for id in 0..=3 {
-            let (x, y) = choose(&mut rng, &valid_agent_locations);
+            let (x, y) = choose(&mut rng, &valid_agent_locations).unwrap();
             println!("Agent {} at {}, {}", id, x, y);
             valid_agent_locations.retain(|p| *p != (x, y));
-            let mut agent = Agent::new(
+            let agent = Agent::new(
                 generate_agent_name(&mut rng),
                 AgentId {
                     player: *player,
@@ -272,27 +289,12 @@ pub fn generate_map(mut players: Vec<PlayerId>) -> MapDesc {
                 (x, y),
                 10 + id * 2,
             );
-            agent.world_position = (x, y);
             areas
                 .iter_mut()
-                .find(|a| a.world_position == (x, y))
+                .find(|area| area.world_position == (x, y))
                 .unwrap()
                 .agents
                 .push(agent);
-        }
-    }
-    for _ in 0..players.len() {
-        for _ in 0..4 {
-            let (x, y) = choose(&mut rng, &valid_agent_locations);
-            println!("Sign at {}, {}", x, y);
-            valid_agent_locations.retain(|p| *p != (x, y));
-            areas
-                .iter_mut()
-                .find(|a| a.world_position == (x, y))
-                .unwrap()
-                .followers
-                .first_mut()
-                .map(|follower| follower.sign_holder = true);
         }
     }
     MapDesc {

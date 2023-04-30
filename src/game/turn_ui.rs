@@ -17,7 +17,7 @@ impl Plugin for TurnUiPlugin {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TurnReportEvent {
     GameStart {
         player_names: Vec<String>,
@@ -33,8 +33,8 @@ pub enum TurnReportEvent {
     Brutalized {
         location: (u32, u32),
         location_name: String,
-        followers: u32,
-        locals: u32,
+        dead: u32,
+        fleeing: u32,
     },
     Sacrificed {
         location: (u32, u32),
@@ -117,8 +117,22 @@ impl TurnReportEvent {
                         "{} brutalized the locals at {}.\n",
                         agent_name, location_name
                     ),
-                    format!("{} locals were killed or\nforced to flee.\n", fail_amount),
-                    format!("{} followers were gained.\n", success_amount),
+                    if *success_amount > 0 {
+                        format!(
+                            "{} locals were swayed, growing your power\n",
+                            success_amount
+                        )
+                    } else {
+                        format!("Your brutality failed.\n")
+                    },
+                    if *fail_amount > 0 {
+                        format!(
+                            "{} locals fled or died, limiting your growth.\n",
+                            fail_amount
+                        )
+                    } else {
+                        format!("")
+                    },
                 ],
                 AgentAction::Corrupt => vec![
                     format!(
@@ -126,17 +140,18 @@ impl TurnReportEvent {
                         agent_name, location_name
                     ),
                     if *success_amount > 0 {
-                        format!("Your ritual succeded.\nAfollower is now corrupted.\nYour power at {} grows.", location_name)
+                        format!("Your ritual succeded.\nAfollower is now corrupted.\nYour power at {} grows.\n", location_name)
                     } else {
                         format!(
-                            "Your ritual failed.\nYour power at {} wanes.",
+                            "Your ritual failed.\nYour power at {} wanes.\n",
                             location_name
                         )
                     },
+                    // Actually, these are signs seen, not failures.
                     if *fail_amount > 0 {
                         format!("Something wondrous happened...\n")
                     } else {
-                        format!("You have a new corrupted follower.\n")
+                        format!("")
                     },
                 ],
                 AgentAction::Sacrifice => vec![
@@ -171,13 +186,14 @@ impl TurnReportEvent {
             },
             TurnReportEvent::Brutalized {
                 location_name,
-                followers,
-                locals,
+                dead,
+                fleeing,
                 ..
-            } => vec![format!(
-                "Brutality at {}! {} followers and {} locals were killed.",
-                location_name, followers, locals
-            )],
+            } => vec![
+                format!("Heretics enact brutality at {}.\n", location_name),
+                format!("{} locals joined the attackers.\n", dead),
+                format!("{} locals fled or died.\n", fleeing),
+            ],
             TurnReportEvent::Sacrificed {
                 location_name,
                 follower,
@@ -226,10 +242,11 @@ impl TurnReportEvent {
     }
 }
 
-#[derive(Resource, Debug, Clone, Default)]
+#[derive(Resource, Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TurnReport {
     pub events: Vec<TurnReportEvent>,
     pub event_id: Option<u32>,
+    #[serde(skip)]
     pub rendered_event_id: Option<u32>,
 }
 
@@ -259,6 +276,8 @@ fn hide_turn_report(
 }
 
 fn view_turn_report(
+    player_id: Res<PlayerId>,
+    evokation_state: Res<EvokingState>,
     mut turn_report: ResMut<TurnReport>,
     keyboard: Res<Input<KeyCode>>,
     mut text_query: Query<(&Name, &mut Text, &mut Visibility)>,
@@ -277,6 +296,10 @@ fn view_turn_report(
             // Close the turn report.
             println!("Closing turn report.");
             event_id = turn_report.events.len() as u32;
+        } else if keyboard.just_pressed(KeyCode::C) {
+            if let Some(evokation) = evokation_state.get_evokation(&player_id) {
+                evokation.store_evokation(true);
+            }
         }
         turn_report.event_id = Some(event_id);
         if event_id >= turn_report.events.len() as u32 {

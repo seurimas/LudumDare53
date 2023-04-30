@@ -1,15 +1,19 @@
 use crate::prelude::*;
 
 #[derive(Resource, Deref, Debug, Clone, Serialize, Deserialize)]
-pub struct GamePlayers(pub HashMap<PlayerId, String>);
+pub struct GamePlayers(pub Vec<String>);
 
 impl GamePlayers {
     pub fn new(players: Vec<String>) -> Self {
-        let mut map = HashMap::new();
-        for (i, name) in players.into_iter().enumerate() {
-            map.insert(PlayerId(i as u32), name);
-        }
-        Self(map)
+        Self(players)
+    }
+
+    pub fn get_name(&self, player_id: PlayerId) -> Option<&String> {
+        self.0.get(player_id.0 as usize)
+    }
+
+    pub fn get_ids(&self) -> Vec<PlayerId> {
+        (0..self.0.len()).map(|i| PlayerId(i as u32)).collect()
     }
 }
 
@@ -17,6 +21,12 @@ impl GamePlayers {
     Resource, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord,
 )]
 pub struct PlayerId(pub u32);
+
+impl From<usize> for PlayerId {
+    fn from(id: usize) -> Self {
+        Self(id as u32)
+    }
+}
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerTurn {

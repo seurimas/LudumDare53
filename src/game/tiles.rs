@@ -4,14 +4,17 @@ use crate::prelude::*;
 
 use super::tooltip::Tooltip;
 
+pub type TileLoc = i32;
+
 #[derive(Component)]
 pub struct MapTile {
     pub selected: bool,
     pub hovered: bool,
     pub focused: bool,
     pub travelling: bool,
-    pub x: u32,
-    pub y: u32,
+    pub x: TileLoc,
+    pub y: TileLoc,
+    pub sprite_id: u32,
     pub offset_y: f32,
     pub target_y: f32,
     pub base_y: f32,
@@ -30,11 +33,13 @@ impl Plugin for TilesPlugin {
 }
 
 pub const TILE_SIZE: f32 = 128.;
+pub const WATER_SPRITE_ID: u32 = 5;
+pub const WATER_COUNT: i32 = 7;
 
 fn load_map(mut commands: Commands, map: Res<MapDesc>, assets: Res<MyAssets>) {
     for y in 0..map.height {
         for x in 0..map.width {
-            let (base_x, base_y) = get_world_pos_for_tile(x, y);
+            let (base_x, base_y) = get_world_pos_for_tile(x as TileLoc, y as TileLoc);
             let sprite_id = map.get_tile(x, y);
             let mut tile = commands.spawn((
                 SpriteSheetBundle {
@@ -51,8 +56,9 @@ fn load_map(mut commands: Commands, map: Res<MapDesc>, assets: Res<MyAssets>) {
                     hovered: false,
                     focused: false,
                     travelling: false,
-                    x,
-                    y,
+                    x: x as i32,
+                    y: y as i32,
+                    sprite_id,
                     offset_y: TILE_SIZE,
                     target_y: rand::random::<f32>() * 8.,
                     base_y,
@@ -61,6 +67,38 @@ fn load_map(mut commands: Commands, map: Res<MapDesc>, assets: Res<MyAssets>) {
             if let Some(area) = map.get_area(x, y) {
                 tile.insert(area.clone());
             }
+        }
+    }
+    for y in -WATER_COUNT..(map.height as TileLoc + WATER_COUNT) {
+        for x in -WATER_COUNT..(map.width as TileLoc + WATER_COUNT) {
+            if x >= 0 && x < map.width as TileLoc && y >= 0 && y < map.height as TileLoc {
+                continue;
+            }
+            let (base_x, base_y) = get_world_pos_for_tile(x, y);
+            let sprite_id = WATER_SPRITE_ID;
+            commands.spawn((
+                SpriteSheetBundle {
+                    texture_atlas: assets.map.clone(),
+                    transform: Transform {
+                        translation: Vec3::new(base_x, base_y, 100. + (y - x) as f32),
+                        ..Default::default()
+                    },
+                    sprite: TextureAtlasSprite::new(sprite_id as usize),
+                    ..Default::default()
+                },
+                MapTile {
+                    selected: false,
+                    hovered: false,
+                    focused: false,
+                    travelling: false,
+                    x,
+                    y,
+                    sprite_id,
+                    offset_y: TILE_SIZE,
+                    target_y: rand::random::<f32>() * 8.,
+                    base_y,
+                },
+            ));
         }
     }
 }
@@ -168,8 +206,9 @@ fn map_mouse_system(
                 } else if m_area.is_some() && mouse_button_input.just_pressed(MouseButton::Right) {
                     audio.play(assets.tile_click.clone());
                     agent_action_query.iter_mut().for_each(|mut action| {
-                        if matches!(*action, AgentAction::Move(_, _, _)) {
-                            *action = AgentAction::Move(x, y, m_area.unwrap().name.clone());
+                        if matches!(*action, AgentAction::Move(_, _, _)) && x > 0 && y > 0 {
+                            *action =
+                                AgentAction::Move(x as u32, y as u32, m_area.unwrap().name.clone());
                         }
                     });
                     map_tile.travelling = true;
@@ -206,23 +245,19 @@ fn map_mouse_system(
 pub fn get_tile_at_screen_pos(
     location: Vec2,
     camera: Query<(&Camera, &GlobalTransform)>,
-) -> Option<(u32, u32)> {
+) -> Option<(TileLoc, TileLoc)> {
     let (camera, camera_transform) = camera.single();
     if let Some(mouse_world_location) = camera.viewport_to_world(camera_transform, location) {
         let (sx, sy) = (mouse_world_location.origin.x, mouse_world_location.origin.y);
         let x = sx / TILE_SIZE + sy / (TILE_SIZE / 2.);
         let y = sx / TILE_SIZE - sy / (TILE_SIZE / 2.);
-        if x.round() >= 0. && y.round() >= 0. {
-            Some((x.round() as u32, y.round() as u32))
-        } else {
-            None
-        }
+        Some((x.round() as TileLoc, y.round() as TileLoc))
     } else {
         None
     }
 }
 
-pub fn get_world_pos_for_tile(x: u32, y: u32) -> (f32, f32) {
+pub fn get_world_pos_for_tile(x: TileLoc, y: TileLoc) -> (f32, f32) {
     let base_x = (x as f32 + y as f32) * (TILE_SIZE / 2.);
     let base_y = (x as f32 - y as f32) * (TILE_SIZE / 4.);
     (base_x, base_y)

@@ -18,6 +18,8 @@ pub struct MyAssets {
     #[asset(path = "map.png")]
     pub map: Handle<TextureAtlas>,
     #[asset(path = "anglodavek/Anglodavek-a55E.ttf")]
+    pub fancy_font: Handle<Font>,
+    #[asset(path = "breath-fire-iii/BreatheFireIii-PKLOB.ttf")]
     pub font: Handle<Font>,
     #[asset(path = "tile_hover.wav")]
     pub tile_hover: Handle<AudioSource>,
@@ -26,12 +28,21 @@ pub struct MyAssets {
     #[asset(path = "EvokeDarkness.wav")]
     pub evoke_darkness: Handle<AudioSource>,
     #[asset(
-        paths("Brutalize.wav", "Prostelytize.wav", "Sacrifice.wav"),
+        paths(
+            "Brutalize.wav",
+            "Prostelytize.wav",
+            "Sacrifice.wav",
+            "Corrupt.wav",
+            "Move.wav"
+        ),
         collection(typed, mapped)
     )]
     pub action_stings: HashMap<String, Handle<AudioSource>>,
     #[asset(
         paths(
+            "Next.png",
+            "NextActive.png",
+            "NextDeactivated.png",
             "Move.png",
             "MoveActive.png",
             "MoveDeactivated.png",

@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use super::turn_ui::TurnReportEvent;
+use super::{turn_ui::TurnReportEvent, WIN_SIGN_COUNT};
 
 #[derive(Resource, Deref, DerefMut)]
 pub struct Season(pub i32);
@@ -119,6 +119,7 @@ pub fn apply_turns(
         },
         &|world_area: &mut WorldArea, agent_id, rng| world_area.sacrifice_followers(agent_id, rng),
     );
+
     report.extend(
         sacrifices
             .iter()
@@ -156,6 +157,48 @@ pub fn apply_turns(
         }
     }));
 
+    let brutalities = single_action(
+        &turns,
+        &mut rngs,
+        &mut new_world_areas,
+        &|action| {
+            if let AgentAction::Brutalize = action {
+                true
+            } else {
+                false
+            }
+        },
+        &|world_area: &mut WorldArea, agent_id, rng| world_area.brutalize_locals(agent_id, rng),
+    );
+
+    report.extend(
+        brutalities
+            .iter()
+            .flat_map(|(x, y, agent_id, success_amount, fail_amount)| {
+                if reporting_player == agent_id.player {
+                    Some(TurnReportEvent::AgentAction {
+                        location: (*x, *y),
+                        location_name: new_world_areas[&(*x, *y)].name.clone(),
+                        agent_name: agents[&agent_id].name.clone(),
+                        action: AgentAction::Brutalize,
+                        success_amount: *success_amount,
+                        fail_amount: *fail_amount,
+                    })
+                } else if *fail_amount > 0
+                    && new_world_areas[&(*x, *y)].get_player_power(reporting_player) > 0
+                {
+                    Some(TurnReportEvent::Brutalized {
+                        location: (*x, *y),
+                        location_name: new_world_areas[&(*x, *y)].name.clone(),
+                        dead: *success_amount,
+                        fleeing: *fail_amount,
+                    })
+                } else {
+                    None
+                }
+            }),
+    );
+
     report.extend(converts.iter().flat_map(|(player, x, y)| {
         if reporting_player == *player {
             Some(TurnReportEvent::FollowersLost {
@@ -174,6 +217,25 @@ pub fn apply_turns(
         });
     } else {
         report.push(TurnReportEvent::NewTurn { turn: season });
+    }
+
+    // Reset stamina.
+    for area in new_world_areas.values_mut() {
+        for agent in &mut area.agents {
+            agent.stamina = 100 + agent.power;
+        }
+        // Kill all the dead followers.
+        area.followers.retain(|follower| follower.power > 0);
+    }
+    let locations: Vec<(u32, u32)> = new_world_areas.keys().cloned().collect();
+    for location in locations {
+        let fleeing = new_world_areas.get_mut(&location).unwrap().flee();
+        for follower in fleeing {
+            new_world_areas
+                .get_mut(&location)
+                .unwrap()
+                .add_follower(follower);
+        }
     }
 
     TurnResults {
@@ -202,12 +264,21 @@ fn move_agents(
 ) -> Vec<(u32, u32, AgentId)> {
     let mut results = Vec::new();
     for turn in turns {
-        let movement_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
-            if let AgentAction::Move(x, y, _) = action {
-                Some((agent_id, x, y))
-            } else {
-                None
-            }
+        let mut movement_actions = turn
+            .actions
+            .iter()
+            .filter_map(|(agent_id, action)| {
+                if let AgentAction::Move(x, y, _) = action {
+                    Some((agent_id, x, y))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        movement_actions.sort_by(|a, b| {
+            let a = *a.0;
+            let b = *b.0;
+            a.cmp(&b)
         });
         for (agent_id, x, y) in movement_actions {
             if let Some(source) = get_agent_location(&world_areas, *agent_id) {
@@ -233,13 +304,18 @@ fn corrupt_followers(
 ) -> Vec<(u32, u32, AgentId, u32, u32)> {
     let mut results = Vec::new();
     for (turn, rng) in turns.iter().zip(rngs.iter_mut()) {
-        let corruption_actions = turn.actions.iter().filter_map(|(agent_id, action)| {
-            if let AgentAction::Corrupt = action {
-                Some(agent_id)
-            } else {
-                None
-            }
-        });
+        let mut corruption_actions = turn
+            .actions
+            .iter()
+            .filter_map(|(agent_id, action)| {
+                if let AgentAction::Corrupt = action {
+                    Some(agent_id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        corruption_actions.sort_by(|a, b| a.player.cmp(&b.player));
         for agent_id in corruption_actions {
             if let Some(source) = get_agent_location(&world_areas, *agent_id) {
                 let (success_amount, signs_seen) = world_areas
@@ -327,15 +403,18 @@ fn prostelytize_followers(
 fn check_winners(world_areas: &HashMap<(u32, u32), WorldArea>) -> Option<PlayerId> {
     let scores = get_scores(world_areas);
     let max_score = scores.values().max().unwrap_or(&0);
+    if *max_score < WIN_SIGN_COUNT {
+        return None;
+    }
     let winners: Vec<PlayerId> = scores
         .iter()
         .filter(|(_, score)| *score == max_score)
         .map(|(player, _)| *player)
         .collect();
     if winners.len() == 1 {
-        None
-    } else {
         winners.get(0).copied()
+    } else {
+        None
     }
 }
 

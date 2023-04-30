@@ -324,12 +324,14 @@ fn watch_for_players(
             .map(|joiner| joiner.name.to_string())
             .collect();
         let game_players = GamePlayers::new(players.clone());
-        let my_player = *game_players
+        let my_player: PlayerId = game_players
             .iter()
+            .enumerate()
             .find(|(_, p)| p.eq_ignore_ascii_case(&menu_state.name))
             .unwrap()
-            .0;
-        commands.insert_resource(generate_map(game_players.keys().cloned().collect()));
+            .0
+            .into();
+        commands.insert_resource(generate_map(game_players.get_ids()));
         commands.insert_resource(PlayerTurn::new(my_player));
         commands.insert_resource(my_player);
         commands.insert_resource(game_players);
@@ -342,7 +344,7 @@ fn watch_for_players(
             text.sections[2].value = format!("{} AI Players", menu_state.ai);
         }
     }
-    if let Some(joiner) = retrieve_from_runes::<Joiner>() {
+    if let Ok(joiner) = retrieve_from_runes::<Joiner>() {
         if menu_state.players.contains(&joiner) {
             return;
         } else {
@@ -410,6 +412,15 @@ fn handle_typing(
                     text.sections[1].value = menu_state.name.clone();
                 }
             }
+        }
+    } else if menu_state.awaiting_players {
+        if keyboard_input.just_pressed(KeyCode::C) {
+            let joiner = menu_state
+                .players
+                .iter()
+                .find(|joiner| joiner.name.eq(&menu_state.name))
+                .unwrap();
+            store_in_runes(joiner, true);
         }
     }
 }

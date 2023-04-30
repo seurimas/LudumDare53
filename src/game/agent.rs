@@ -1,11 +1,11 @@
 use crate::prelude::*;
 
-use super::{player, ui::ActiveInactiveImages};
+use super::{player, ui::ActiveInactiveImages, WIN_SIGN_COUNT};
 
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AgentAction {
     None,
-    Move(u32, u32, String),
+    Move(u32, u32, #[serde(skip)] String),
     Prostelytize,
     Brutalize,
     Corrupt,
@@ -17,20 +17,20 @@ pub const CORRUPT_POWER: u32 = 30;
 impl AgentAction {
     pub fn describe(&self) -> String {
         match self {
-            AgentAction::None => "This agent is unassigned.".to_string(),
-            AgentAction::Move(_, _, name) => format!("Move to {}.", name),
+            AgentAction::None => "View next agent in area, if any.".to_string(),
+            AgentAction::Move(_, _, name) => format!("Travel\n\nMove to {}.", name),
             AgentAction::Prostelytize => {
-                "Prostelytize to the locals, hoping to gain new followers.".to_string()
+                "Prostelytize\n\nSpread the word of darkness to the locals to gain new followers.".to_string()
             }
             AgentAction::Brutalize => {
-                "Brutalize the locals, scaring away the weak\nand attracting the strong."
+                "Brutalize\n\nBrutalize the locals, scaring away the weak\nand attracting the strong."
                     .to_string()
             }
             AgentAction::Corrupt => {
-                "Attempt to corrupt a follower,\ngaining access to greater power.".to_string()
+                "Corrupt\n\nAttempt to corrupt a follower,\ngaining access to greater power.".to_string()
             }
             AgentAction::Sacrifice => {
-                "Sacrifice a local, hoping to unlock\na Sign of Corruption.".to_string()
+                "Sacrifice\n\nSacrifice a local, hoping to unlock\na Sign of Corruption.".to_string()
             }
         }
     }
@@ -78,6 +78,10 @@ impl AgentAction {
                     Some("You have no corrupted followers to enact sacrifices.".to_string())
                 } else if area.get_player_power(agent.id.player) <= area.get_value() / 3 {
                     Some(format!("The heretics would stop your public sacrifice."))
+                } else if area.get_possible_sign_holder_count(agent.id) == 0 {
+                    Some(format!(
+                        "There are no possible sign holders here.\nSearch elsewhere."
+                    ))
                 } else {
                     None
                 }
@@ -90,18 +94,9 @@ impl AgentAction {
             AgentAction::Brutalize => "Brutalize.wav",
             AgentAction::Prostelytize => "Prostelytize.wav",
             AgentAction::Sacrifice => "Sacrifice.wav",
+            AgentAction::Corrupt => "Corrupt.wav",
+            AgentAction::Move(_, _, _) => "Move.wav",
             _ => "",
-        }
-    }
-
-    pub fn check_sum(&self) -> u32 {
-        match self {
-            AgentAction::None => 0,
-            AgentAction::Move(x, y, _) => (*x + *y) as u32,
-            AgentAction::Prostelytize => 8,
-            AgentAction::Brutalize => 9,
-            AgentAction::Corrupt => 10,
-            AgentAction::Sacrifice => 1,
         }
     }
 }
@@ -110,7 +105,7 @@ impl AgentAction {
 pub struct Agent {
     pub name: String,
     pub id: AgentId,
-    pub world_position: (u32, u32),
+    // pub world_position: (u32, u32),
     pub power: u32,
     pub corrupted: bool,
     pub stamina: u32,
@@ -122,7 +117,7 @@ impl Agent {
         Self {
             name,
             id,
-            world_position,
+            // world_position,
             power,
             corrupted: false,
             stamina: 100,
@@ -135,7 +130,7 @@ impl Agent {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct AgentId {
     pub player: PlayerId,
     pub agent: u32,
@@ -164,14 +159,16 @@ impl Plugin for AgentPlugin {
             .add_system(update_agent_locations.run_if(in_state(GameState::Playing)))
             .add_system(prepare_my_turn.run_if(in_state(GameState::Playing)))
             .add_system(update_agent_label.run_if(in_state(GameState::Playing)))
+            .add_system(signs_tooltip.run_if(in_state(GameState::Playing)))
+            .add_system(corrupted_tooltip.run_if(in_state(GameState::Playing)))
             .add_system(agent_tooltip.run_if(in_state(GameState::Playing)));
     }
 }
 
 #[derive(Default)]
 struct AgentUiState {
-    x: u32,
-    y: u32,
+    x: TileLoc,
+    y: TileLoc,
     agent_idx: u32,
     tooltip_control: bool,
 }
@@ -206,27 +203,16 @@ fn render_agent_ui(
             local.agent_idx = world_area
                 .get_unassigned_player_agent(&player_turn)
                 .unwrap_or(0);
-            println!(
-                "Showing agent {} {:?}",
-                local.agent_idx,
-                world_area.get_unassigned_player_agent(&player_turn)
-            );
         }
         if let Some(active_agent) = world_area.get_nth_player_agent(*player_id, local.agent_idx) {
             for (entity, name, mut text, rcp, mut visibility) in ui_query.iter_mut() {
                 if let Some(name) = name {
-                    if name.eq_ignore_ascii_case("Agent") {
+                    if name.eq_ignore_ascii_case("agent_name") {
                         text.unwrap().sections[0].value = active_agent.name.clone();
-                    } else if name.eq_ignore_ascii_case("Agent Power") {
+                    } else if name.eq_ignore_ascii_case("agent_power") {
                         text.unwrap().sections[0].value = active_agent.power.to_string();
-                    } else if name.eq_ignore_ascii_case("Agent Stamina") {
-                        text.unwrap().sections[0].value = active_agent.stamina.to_string();
-                    } else if name.eq_ignore_ascii_case("Corrupted?") {
-                        if active_agent.corrupted {
-                            text.unwrap().sections[0].value = "Yes".to_string();
-                        } else {
-                            text.unwrap().sections[0].value = "No".to_string();
-                        }
+                    } else if name.eq_ignore_ascii_case("agent_signs") {
+                        text.unwrap().sections[0].value = active_agent.signs.to_string();
                     } else if name.eq_ignore_ascii_case("Area Agent") {
                         *visibility = Visibility::Visible;
                     }
@@ -246,7 +232,9 @@ fn render_agent_ui(
                 match interaction {
                     Interaction::Clicked => {
                         if let Ok(action) = action_query.get(entity) {
-                            if action.invalid_reasons(active_agent, world_area).is_none() {
+                            if *action == AgentAction::None {
+                                local.agent_idx += 1;
+                            } else if action.invalid_reasons(active_agent, world_area).is_none() {
                                 player_turn.set_action(active_agent.id, action.clone());
                                 if let Some(sound) = assets.action_stings.get(action.sting()) {
                                     audio.play(sound.clone());
@@ -356,7 +344,7 @@ fn agent_tooltip(
     player_agents: Res<AgentLocations>,
     mut tooltip: ResMut<Tooltip>,
     agent_label: Query<(&RelativeCursorPosition, &Name)>,
-    mut tile_query: Query<(&mut MapTile)>,
+    mut tile_query: Query<(&mut MapTile, &WorldArea)>,
     input: Res<Input<MouseButton>>,
 ) {
     for (cursor, name) in agent_label.iter() {
@@ -372,8 +360,8 @@ fn agent_tooltip(
                         unassigned_agents
                     ));
                     if input.just_pressed(MouseButton::Left) {
-                        tile_query.iter_mut().for_each(|mut tile| {
-                            if tile.x == agent_x && tile.y == agent_y {
+                        tile_query.iter_mut().for_each(|(mut tile, _)| {
+                            if tile.x == agent_x as TileLoc && tile.y == agent_y as TileLoc {
                                 tile.focused = true;
                                 tile.selected = true;
                             } else {
@@ -382,6 +370,85 @@ fn agent_tooltip(
                             }
                         });
                     }
+                }
+            } else if *tooltip_control {
+                tooltip.value = None;
+                *tooltip_control = false;
+            }
+        }
+    }
+}
+
+fn corrupted_tooltip(
+    mut corrupted_idx: Local<usize>,
+    mut tooltip_control: Local<bool>,
+    player_turn: Res<PlayerTurn>,
+    mut tooltip: ResMut<Tooltip>,
+    agent_label: Query<(&RelativeCursorPosition, &Name)>,
+    mut tile_query: Query<(&mut MapTile, &WorldArea)>,
+    input: Res<Input<MouseButton>>,
+) {
+    for (cursor, name) in agent_label.iter() {
+        if name.eq_ignore_ascii_case("Corrupted") {
+            if cursor.mouse_over() {
+                *tooltip_control = true;
+                let corrupted_count = tile_query
+                    .iter()
+                    .filter(|(_, area)| area.corrupted_count(player_turn.player_id) > 0)
+                    .count();
+                if corrupted_count > 0 {
+                    tooltip.value = Some(format!(
+                        "{} areas have corrupted followers. Click to focus one.",
+                        corrupted_count,
+                    ));
+                } else {
+                    tooltip.value = Some("You have no corrupted followers.\nSpread the words of darkness to grow your power.\nThen corrupt your followers.".to_string());
+                }
+                if corrupted_count > 0 && input.just_pressed(MouseButton::Left) {
+                    *corrupted_idx += 1;
+                    for (mut tile, _) in tile_query.iter_mut() {
+                        tile.focused = false;
+                        tile.selected = false;
+                    }
+                    if let Some((mut tile, _)) = tile_query
+                        .iter_mut()
+                        .filter(|(_, area)| area.corrupted_count(player_turn.player_id) > 0)
+                        .nth(*corrupted_idx % corrupted_count)
+                    {
+                        tile.focused = true;
+                        tile.selected = true;
+                    }
+                }
+            } else if *tooltip_control {
+                tooltip.value = None;
+                *tooltip_control = false;
+            }
+        }
+    }
+}
+
+fn signs_tooltip(
+    mut tooltip_control: Local<bool>,
+    player_turn: Res<PlayerTurn>,
+    mut tooltip: ResMut<Tooltip>,
+    agent_label: Query<(&RelativeCursorPosition, &Name)>,
+    tile_query: Query<(&MapTile, &WorldArea)>,
+) {
+    for (cursor, name) in agent_label.iter() {
+        if name.eq_ignore_ascii_case("Signs") {
+            if cursor.mouse_over() {
+                *tooltip_control = true;
+                let signs_count = tile_query
+                    .iter()
+                    .map(|(_, area)| area.sign_count(player_turn.player_id))
+                    .sum::<u32>();
+                if signs_count > 0 {
+                    tooltip.value = Some(format!(
+                        "Your agents control {} signs. You need {} to win.",
+                        signs_count, WIN_SIGN_COUNT,
+                    ));
+                } else {
+                    tooltip.value = Some("You have no signs.\nCorrupted followers can enact sacrifices to discover signs.".to_string());
                 }
             } else if *tooltip_control {
                 tooltip.value = None;

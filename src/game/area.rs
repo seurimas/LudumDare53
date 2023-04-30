@@ -2,10 +2,14 @@ use std::convert;
 
 use crate::prelude::*;
 
+use super::player;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Follower {
     pub sign_holder: bool,
     pub corrupted: bool,
+    #[serde(skip)]
+    pub fleeing: Option<(u32, u32)>,
     pub affinity: Option<PlayerId>,
     pub power: u32,
 }
@@ -15,6 +19,7 @@ impl Follower {
         Self {
             sign_holder: false,
             corrupted: false,
+            fleeing: None,
             affinity: None,
             power,
         }
@@ -45,8 +50,23 @@ impl WorldArea {
         self.followers.push(follower);
     }
 
+    pub fn flee(&mut self) -> Vec<Follower> {
+        let fleeing = self
+            .followers
+            .iter()
+            .filter(|f| f.fleeing.is_some())
+            .cloned()
+            .collect();
+        self.followers.retain(|f| f.fleeing.is_none());
+        fleeing
+    }
+
     pub fn add_agent(&mut self, agent: Agent) {
         self.agents.push(agent);
+    }
+
+    pub fn get_agent_powers(&self) -> HashMap<PlayerId, u32> {
+        self.agents.iter().map(|a| (a.id.player, a.power)).collect()
     }
 
     pub fn get_agent_mut(&mut self, agent_id: AgentId) -> Option<&mut Agent> {
@@ -58,6 +78,13 @@ impl WorldArea {
             .iter()
             .find(|a| a.id == agent_id)
             .map(|a| a.power)
+    }
+
+    pub fn get_possible_sign_holder_count(&self, agent_id: AgentId) -> usize {
+        self.followers
+            .iter()
+            .filter(can_be_sign_holder(agent_id))
+            .count()
     }
 
     pub fn get_agent_stamina(&self, agent_id: AgentId) -> Option<u32> {
@@ -78,6 +105,86 @@ impl WorldArea {
         agent
     }
 
+    pub fn brutalize_locals(&mut self, agent_id: AgentId, rng: &mut StdRng) -> (u32, u32) {
+        let agent_powers = self.get_agent_powers();
+        let agent = self.agents.iter_mut().find(|a| a.id == agent_id);
+        if agent.is_none() {
+            return (0, 0);
+        }
+        let agent = agent.unwrap();
+        let mut player_power = self
+            .followers
+            .iter()
+            .map(|follower| {
+                if follower.affinity == Some(agent.id.player) {
+                    follower.power
+                } else {
+                    0
+                }
+            })
+            .sum::<u32>()
+            + agent.power;
+        let mut attacks_left = 10;
+        let mut swayed = 0;
+        let mut flee = 0;
+        while attacks_left > 0 && player_power > 0 {
+            attacks_left -= 1;
+            let non_player_local_count = self
+                .followers
+                .iter()
+                .filter(|follower| follower.affinity != Some(agent.id.player))
+                .count();
+            if non_player_local_count == 0 {
+                break;
+            }
+            let local = choose_mut_iter(
+                rng,
+                self.followers
+                    .iter_mut()
+                    .filter(|follower| follower.affinity != Some(agent.id.player)),
+                non_player_local_count,
+            )
+            .unwrap();
+            player_power = player_power.saturating_sub(local.power);
+            if let Some(other_player) = local.affinity {
+                if agent_powers.contains_key(&other_player) {
+                    player_power = player_power.saturating_sub(agent_powers[&other_player]);
+                } else {
+                    local.fleeing = walking_choose(rng, self.nearest_neighbors.as_slice());
+                    flee += 1;
+                }
+            } else if rng.gen_bool((player_power as f64 / 100.).clamp(0.1, 0.9)) {
+                local.power /= 2;
+                local.affinity = Some(agent.id.player);
+                swayed += 1;
+            } else {
+                local.fleeing = walking_choose(rng, self.nearest_neighbors.as_slice());
+                local.power = local.power.saturating_sub(player_power / 2).clamp(4, 8);
+                flee += 1;
+            }
+        }
+        for _ in 0..swayed {
+            let follower_count = self
+                .followers
+                .iter()
+                .filter(|follower| follower.affinity == Some(agent.id.player))
+                .count();
+            if follower_count == 0 {
+                break;
+            }
+            let follower = choose_mut_iter(
+                rng,
+                self.followers
+                    .iter_mut()
+                    .filter(|follower| follower.affinity == Some(agent.id.player)),
+                follower_count,
+            );
+            follower.unwrap().power += rng.gen_range(2..=5);
+            agent.power += rng.gen_range(1..=3);
+        }
+        (swayed, flee)
+    }
+
     pub fn sacrifice_followers(&mut self, agent_id: AgentId, rng: &mut StdRng) -> (u32, u32) {
         let agent = self.agents.iter_mut().find(|a| a.id == agent_id);
         if agent.is_none() {
@@ -87,14 +194,16 @@ impl WorldArea {
         let player_followers = self
             .followers
             .iter_mut()
-            .filter(can_be_sign_holder(agent_id))
+            .filter(can_be_sign_holder_mut(agent_id))
             .count();
         let my_followers = self
             .followers
             .iter_mut()
-            .filter(can_be_sign_holder(agent_id));
-
-        let sacrificed_follower = choose_mut_iter(rng, my_followers, player_followers);
+            .filter(can_be_sign_holder_mut(agent_id));
+        if player_followers == 0 {
+            return (0, 0);
+        }
+        let sacrificed_follower = choose_mut_iter(rng, my_followers, player_followers).unwrap();
         if sacrificed_follower.sign_holder {
             agent.power += sacrificed_follower.power;
             agent.signs += 1;
@@ -118,7 +227,10 @@ impl WorldArea {
             .followers
             .iter_mut()
             .filter(|follower| follower.affinity == Some(agent_id.player));
-        let corrupted_follower = choose_mut_iter(rng, my_followers, player_followers);
+        if player_followers == 0 {
+            return (0, 0);
+        }
+        let corrupted_follower = choose_mut_iter(rng, my_followers, player_followers).unwrap();
         if corrupted_follower.sign_holder {
             corrupted_follower.corrupted = true;
             corrupted_follower.power *= 10;
@@ -153,8 +265,11 @@ impl WorldArea {
             return (0, 0, None);
         }
         let mut agent = agent.unwrap();
-        agent.exhaust(10);
-        let follower = choose_mut(rng, self.followers.as_mut_slice());
+        agent.exhaust(agent.power);
+        if self.followers.len() == 0 {
+            return (0, 0, None);
+        }
+        let follower = choose_mut(rng, self.followers.as_mut_slice()).unwrap();
         if follower.affinity.is_none() {
             if follower.power < agent.power {
                 follower.affinity = Some(agent_id.player);
@@ -170,6 +285,8 @@ impl WorldArea {
             return (0, 0, None);
         } else {
             if rng.gen_range(0..=agent.power) > follower.power {
+                // Double loss for stealing!
+                agent.exhaust(follower.power);
                 agent.power += (follower.power / 2).clamp(3, 5);
                 let converted_player = follower.affinity;
                 follower.affinity = Some(agent_id.player);
@@ -184,7 +301,11 @@ impl WorldArea {
         self.agents.iter().filter(|a| a.id.player == player).count() as u32
     }
 
-    pub fn get_nth_player_agent(&self, player: PlayerId, agent: u32) -> Option<&Agent> {
+    pub fn get_nth_player_agent(&self, player: PlayerId, mut agent: u32) -> Option<&Agent> {
+        let count = self.get_player_agent_count(player);
+        while agent >= count && count != 0 {
+            agent -= count;
+        }
         self.agents
             .iter()
             .filter(|a| a.id.player == player)
@@ -209,11 +330,19 @@ impl WorldArea {
     }
 
     pub fn get_player_power(&self, player: PlayerId) -> u32 {
-        self.followers
+        let follower_power: u32 = self
+            .followers
             .iter()
             .filter(|f| f.affinity == Some(player))
             .map(|f| f.power)
-            .sum()
+            .sum();
+        let agent_power: u32 = self
+            .agents
+            .iter()
+            .filter(|a| a.id.player == player)
+            .map(|f| f.power)
+            .sum();
+        follower_power + agent_power
     }
 
     pub fn corrupted_followers(&self, player: PlayerId) -> u32 {
@@ -252,8 +381,16 @@ impl WorldArea {
     }
 }
 
-fn can_be_sign_holder(agent_id: AgentId) -> impl Fn(&&mut Follower) -> bool {
-    move |follower| follower.affinity == Some(agent_id.player) && follower.power > 10
+fn can_be_sign_holder_mut(agent_id: AgentId) -> impl Fn(&&mut Follower) -> bool {
+    move |follower| {
+        follower.affinity == Some(agent_id.player) && follower.power > 10 && !follower.corrupted
+    }
+}
+
+fn can_be_sign_holder(agent_id: AgentId) -> impl Fn(&&Follower) -> bool {
+    move |follower| {
+        follower.affinity == Some(agent_id.player) && follower.power > 10 && !follower.corrupted
+    }
 }
 
 pub struct AreaPlugin;
@@ -276,21 +413,21 @@ fn render_area_ui(
             for (name, text, mut visibility) in text_query.iter_mut() {
                 if name.eq_ignore_ascii_case("area_ui") {
                     *visibility = Visibility::Visible;
-                } else if name.eq_ignore_ascii_case("Area Name") {
+                } else if name.eq_ignore_ascii_case("area_name") {
                     text.unwrap().sections[0].value = area.name.clone();
-                } else if name.eq_ignore_ascii_case("Area Population") {
+                } else if name.eq_ignore_ascii_case("area_population") {
                     let all_followers = area.followers.len();
                     text.unwrap().sections[0].value = all_followers.to_string();
-                } else if name.eq_ignore_ascii_case("Area Value") {
+                } else if name.eq_ignore_ascii_case("area_total_power") {
                     let all_power = area.get_value();
                     text.unwrap().sections[0].value = all_power.to_string();
-                } else if name.eq_ignore_ascii_case("Area Followers") {
+                } else if name.eq_ignore_ascii_case("area_followers") {
                     let player_followers = area.get_player_followers(*player);
                     text.unwrap().sections[0].value = player_followers.to_string();
-                } else if name.eq_ignore_ascii_case("Area Power") {
+                } else if name.eq_ignore_ascii_case("area_your_power") {
                     let player_power = area.get_player_power(*player);
                     text.unwrap().sections[0].value = player_power.to_string();
-                } else if name.eq_ignore_ascii_case("Area Corrupted") {
+                } else if name.eq_ignore_ascii_case("area_corrupted") {
                     let player_corrupted = area.corrupted_followers(*player);
                     text.unwrap().sections[0].value = player_corrupted.to_string();
                 }

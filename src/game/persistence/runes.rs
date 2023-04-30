@@ -72,10 +72,10 @@ pub fn generate_runes(bytes: &[u8], futhark: bool) -> String {
         .collect()
 }
 
-pub fn retrieve_from_runes<T: crate::prelude::DeserializeOwned>() -> Option<T> {
+pub fn retrieve_from_runes<T: crate::prelude::DeserializeOwned>() -> Result<T, String> {
     arboard::Clipboard::new()
         .and_then(|mut clipboard| clipboard.get_text())
-        .ok()
+        .map_err(|e| e.to_string())
         .map(|text| {
             let futhark = parse_runes(&text, true);
             if futhark.len() > 0 {
@@ -84,16 +84,20 @@ pub fn retrieve_from_runes<T: crate::prelude::DeserializeOwned>() -> Option<T> {
                 parse_runes(&text, false)
             }
         })
-        .and_then(|data| postcard::from_bytes(data.as_slice()).ok())
+        .and_then(|bytes| postcard::from_bytes(&bytes).map_err(|e| e.to_string()))
 }
 
 pub fn store_in_runes<T: crate::prelude::Serialize>(t: T, futhark: bool) -> Option<String> {
-    let data = postcard::to_allocvec(&t).unwrap();
-    let runes = generate_runes(data.as_slice(), futhark);
+    let runes = create_runes(t, futhark);
     arboard::Clipboard::new()
         .and_then(|mut clipboard| clipboard.set_text(runes.clone()))
         .ok()
         .map(|_| runes)
+}
+
+pub fn create_runes<T: crate::prelude::Serialize>(t: T, futhark: bool) -> String {
+    let data = postcard::to_allocvec(&t).unwrap();
+    generate_runes(data.as_slice(), futhark)
 }
 
 #[cfg(test)]

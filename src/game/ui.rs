@@ -87,7 +87,12 @@ fn spawn_stat_ui(parent: &mut ChildBuilder, font: Handle<Font>) {
         });
 }
 
-fn spawn_labeled_value(parent: &mut ChildBuilder, font: Handle<Font>, name: &'static str) {
+fn spawn_labeled_value(
+    parent: &mut ChildBuilder,
+    font: Handle<Font>,
+    label: &'static str,
+    name: &'static str,
+) {
     parent
         .spawn(NodeBundle {
             style: Style {
@@ -106,7 +111,7 @@ fn spawn_labeled_value(parent: &mut ChildBuilder, font: Handle<Font>, name: &'st
                     ..default()
                 },
                 text: Text::from_section(
-                    name,
+                    label,
                     TextStyle {
                         font: font.clone(),
                         font_size: FONT_SIZE,
@@ -189,9 +194,9 @@ fn spawn_agent_section(
             Name::new("Area Agent"),
         ))
         .with_children(|parent| {
-            spawn_labeled_value(parent, font.clone(), "Agent");
-            spawn_labeled_value(parent, font.clone(), "Agent Power");
-            spawn_labeled_value(parent, font.clone(), "Corrupted?");
+            spawn_labeled_value(parent, font.clone(), "Name", "agent_name");
+            spawn_labeled_value(parent, font.clone(), "Power", "agent_power");
+            spawn_labeled_value(parent, font.clone(), "Signs", "agent_signs");
             parent
                 .spawn((
                     NodeBundle {
@@ -245,6 +250,13 @@ fn spawn_agent_section(
                         action_buttons["SacrificeDeactivated.png"].clone(),
                         AgentAction::Sacrifice,
                     );
+                    spawn_agent_action_button(
+                        parent,
+                        action_buttons["NextActive.png"].clone(),
+                        action_buttons["Next.png"].clone(),
+                        action_buttons["NextDeactivated.png"].clone(),
+                        AgentAction::None,
+                    );
                 });
         });
 }
@@ -268,12 +280,12 @@ fn spawn_area_ui(
             Name::new("area_ui"),
         ))
         .with_children(|parent| {
-            spawn_labeled_value(parent, font.clone(), "Area Name");
-            spawn_labeled_value(parent, font.clone(), "Area Population");
-            spawn_labeled_value(parent, font.clone(), "Area Value");
-            spawn_labeled_value(parent, font.clone(), "Area Followers");
-            spawn_labeled_value(parent, font.clone(), "Area Power");
-            spawn_labeled_value(parent, font.clone(), "Area Corrupted");
+            spawn_labeled_value(parent, font.clone(), "", "area_name");
+            spawn_labeled_value(parent, font.clone(), "Population", "area_population");
+            spawn_labeled_value(parent, font.clone(), "Total Power", "area_total_power");
+            spawn_labeled_value(parent, font.clone(), "Followers", "area_followers");
+            spawn_labeled_value(parent, font.clone(), "Your Power", "area_your_power");
+            spawn_labeled_value(parent, font.clone(), "Corrupted", "area_corrupted");
             spawn_agent_section(parent, font.clone(), action_buttons);
         });
 }

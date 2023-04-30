@@ -23,7 +23,10 @@ impl PluginGroup for GamePlugins {
         group = group.add(ui::UiPlugin);
         group = group.add(tooltip::TooltipPlugin);
         group = group.add(turn_ui::TurnUiPlugin);
+        group = group.add(persistence::PersistencePlugin);
 
         group
     }
 }
+
+pub const WIN_SIGN_COUNT: u32 = 3;
