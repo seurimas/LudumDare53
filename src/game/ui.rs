@@ -159,6 +159,7 @@ fn spawn_agent_action_button(
     inactive_action_button: Handle<Image>,
     deactivated_action_button: Handle<Image>,
     agent_action: AgentAction,
+    position: UiRect,
 ) {
     let images = ActiveInactiveImages {
         active: active_action_button,
@@ -170,6 +171,13 @@ fn spawn_agent_action_button(
             style: Style {
                 border: UiRect::all(Val::Px(ONE_UNIT)),
                 size: Size::new(Val::Px(64.), Val::Px(64.)),
+                flex_shrink: 0.,
+                position,
+                position_type: if position == UiRect::default() {
+                    PositionType::default()
+                } else {
+                    PositionType::Absolute
+                },
                 ..Default::default()
             },
             image: inactive_action_button.into(),
@@ -226,6 +234,7 @@ fn spawn_agent_section(
                         action_buttons["Move.png"].clone(),
                         action_buttons["MoveDeactivated.png"].clone(),
                         AgentAction::Move(u32::MAX, u32::MAX, "".to_string()),
+                        default(),
                     );
                     spawn_agent_action_button(
                         parent,
@@ -233,6 +242,7 @@ fn spawn_agent_section(
                         action_buttons["Prostelytize.png"].clone(),
                         action_buttons["ProstelytizeDeactivated.png"].clone(),
                         AgentAction::Prostelytize,
+                        default(),
                     );
                     spawn_agent_action_button(
                         parent,
@@ -240,20 +250,51 @@ fn spawn_agent_section(
                         action_buttons["Brutalize.png"].clone(),
                         action_buttons["BrutalizeDeactivated.png"].clone(),
                         AgentAction::Brutalize,
+                        default(),
                     );
-                    spawn_agent_action_button(
-                        parent,
-                        action_buttons["CorruptActive.png"].clone(),
-                        action_buttons["Corrupt.png"].clone(),
-                        action_buttons["CorruptDeactivated.png"].clone(),
-                        AgentAction::Corrupt,
-                    );
+                    parent
+                        .spawn(NodeBundle {
+                            style: Style {
+                                size: Size::new(Val::Px(64.), Val::Px(64.)),
+                                ..default()
+                            },
+                            ..default()
+                        })
+                        .with_children(|parent| {
+                            spawn_agent_action_button(
+                                parent,
+                                action_buttons["CorruptActive.png"].clone(),
+                                action_buttons["Corrupt.png"].clone(),
+                                action_buttons["CorruptDeactivated.png"].clone(),
+                                AgentAction::Corrupt,
+                                UiRect {
+                                    left: Val::Px(0.),
+                                    right: Val::Px(0.),
+                                    top: Val::Px(0.),
+                                    bottom: Val::Px(0.),
+                                },
+                            );
+                            spawn_agent_action_button(
+                                parent,
+                                action_buttons["CorruptAgentActive.png"].clone(),
+                                action_buttons["CorruptAgent.png"].clone(),
+                                action_buttons["CorruptAgentDeactivated.png"].clone(),
+                                AgentAction::CorruptAgent,
+                                UiRect {
+                                    left: Val::Px(0.),
+                                    right: Val::Px(0.),
+                                    top: Val::Px(0.),
+                                    bottom: Val::Px(0.),
+                                },
+                            );
+                        });
                     spawn_agent_action_button(
                         parent,
                         action_buttons["SacrificeActive.png"].clone(),
                         action_buttons["Sacrifice.png"].clone(),
                         action_buttons["SacrificeDeactivated.png"].clone(),
                         AgentAction::Sacrifice,
+                        default(),
                     );
                     spawn_agent_action_button(
                         parent,
@@ -261,6 +302,7 @@ fn spawn_agent_section(
                         action_buttons["Next.png"].clone(),
                         action_buttons["NextDeactivated.png"].clone(),
                         AgentAction::None,
+                        default(),
                     );
                 });
         });
@@ -296,7 +338,6 @@ fn spawn_area_ui(
 }
 
 fn gameplay_ui(mut commands: Commands, assets: Res<MyAssets>) {
-    println!("Spawning debug UI");
     // Stats area.
     commands
         .spawn(NodeBundle {

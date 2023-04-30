@@ -31,4 +31,4 @@ impl PluginGroup for GamePlugins {
     }
 }
 
-pub const WIN_SIGN_COUNT: u32 = 3;
+pub const WIN_SIGN_COUNT: u32 = 5;

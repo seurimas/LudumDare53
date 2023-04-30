@@ -17,11 +17,13 @@ impl Plugin for PersistencePlugin {
 
 #[derive(Serialize, Deserialize)]
 pub struct SaveData {
-    players: GamePlayers,
-    player_id: PlayerId,
-    map_desc: MapDesc,
-    last_evokation: Option<String>,
-    turn_report: TurnReport,
+    pub season: Season,
+    pub ai_seeds: AiSeeds,
+    pub players: GamePlayers,
+    pub player_id: PlayerId,
+    pub map_desc: MapDesc,
+    pub last_evokation: Option<String>,
+    pub turn_report: TurnReport,
 }
 
 fn describe_map(tile_query: &Query<(&MapTile, Option<&WorldArea>)>) -> MapDesc {
@@ -51,6 +53,7 @@ fn describe_map(tile_query: &Query<(&MapTile, Option<&WorldArea>)>) -> MapDesc {
 fn save_periodically(
     mut last_season: Local<i32>,
     season: Res<Season>,
+    ai_seeds: Res<AiSeeds>,
     players: Res<GamePlayers>,
     player: Res<PlayerId>,
     evokation: Res<EvokingState>,
@@ -61,6 +64,8 @@ fn save_periodically(
         *last_season = season.0;
         let map_desc = describe_map(&tile_query);
         let save_data = SaveData {
+            season: *season,
+            ai_seeds: ai_seeds.clone(),
             players: players.clone(),
             player_id: *player,
             map_desc,

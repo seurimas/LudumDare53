@@ -206,7 +206,7 @@ fn map_mouse_system(
                 } else if m_area.is_some() && mouse_button_input.just_pressed(MouseButton::Right) {
                     audio.play(assets.tile_click.clone());
                     agent_action_query.iter_mut().for_each(|mut action| {
-                        if matches!(*action, AgentAction::Move(_, _, _)) && x > 0 && y > 0 {
+                        if matches!(*action, AgentAction::Move(_, _, _)) && x >= 0 && y >= 0 {
                             *action =
                                 AgentAction::Move(x as u32, y as u32, m_area.unwrap().name.clone());
                         }

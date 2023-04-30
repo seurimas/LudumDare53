@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use super::{turn_ui::TurnReportEvent, WIN_SIGN_COUNT};
 
-#[derive(Resource, Deref, DerefMut)]
+#[derive(Resource, Deref, DerefMut, Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Season(pub i32);
 
 pub struct TurnResults {
@@ -51,6 +51,37 @@ pub fn apply_turns(
             None
         }
     }));
+
+    let corrupted_agents = single_action(
+        &turns,
+        &mut rngs,
+        &mut new_world_areas,
+        &|action| {
+            if let AgentAction::CorruptAgent = action {
+                true
+            } else {
+                false
+            }
+        },
+        &|world_area: &mut WorldArea, agent_id, rng| world_area.corrupt_agent(agent_id, rng),
+    );
+
+    report.extend(corrupted_agents.iter().flat_map(
+        |(x, y, agent_id, success_amount, fail_amount)| {
+            if reporting_player == agent_id.player {
+                Some(TurnReportEvent::AgentAction {
+                    location: (*x, *y),
+                    location_name: new_world_areas[&(*x, *y)].name.clone(),
+                    agent_name: agents[&agent_id].name.clone(),
+                    action: AgentAction::CorruptAgent,
+                    success_amount: *success_amount,
+                    fail_amount: *fail_amount,
+                })
+            } else {
+                None
+            }
+        },
+    ));
 
     let corruptions = corrupt_followers(&turns, &mut rngs, &mut new_world_areas);
     report.extend(

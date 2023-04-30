@@ -9,10 +9,12 @@ pub enum AgentAction {
     Prostelytize,
     Brutalize,
     Corrupt,
+    CorruptAgent,
     Sacrifice,
 }
 
 pub const CORRUPT_POWER: u32 = 30;
+pub const HIDE_BUTTON: &'static str = "HIDE";
 
 impl AgentAction {
     pub fn describe(&self) -> String {
@@ -28,6 +30,9 @@ impl AgentAction {
             }
             AgentAction::Corrupt => {
                 "Corrupt\n\nAttempt to corrupt a follower,\ngaining access to greater power.".to_string()
+            }
+            AgentAction::CorruptAgent => {
+                "Corrupt Agent\n\nAttempt to corrupt this agent.\nYou will lose a corrupted follower.".to_string()
             }
             AgentAction::Sacrifice => {
                 "Sacrifice\n\nSacrifice a local, hoping to unlock\na Sign of Corruption.".to_string()
@@ -55,10 +60,14 @@ impl AgentAction {
                 }
             }
             AgentAction::Brutalize => {
-                if area.get_player_power(agent.id.player) > area.get_value() / 5 {
+                if area.get_non_player_agent_power(agent.id.player)
+                    > area.get_player_power(agent.id.player)
+                {
+                    Some("A hertical agent would overpower your followers.".to_string())
+                } else if area.get_player_power(agent.id.player) > area.get_value() / 5 {
                     None
                 } else {
-                    Some("The heretics would overpower your followers.".to_string())
+                    Some("The locals are not afraid of your followers.".to_string())
                 }
             }
             AgentAction::Corrupt => {
@@ -68,7 +77,18 @@ impl AgentAction {
                         CORRUPT_POWER
                     ))
                 } else if area.corrupted_followers(agent.id.player) > 0 {
-                    Some("You already have a corrupted follower to enact sacrifices.".to_string())
+                    Some(HIDE_BUTTON.to_string())
+                } else {
+                    None
+                }
+            }
+            AgentAction::CorruptAgent => {
+                if area.corrupted_followers(agent.id.player) == 0 {
+                    Some(HIDE_BUTTON.to_string())
+                } else if area.get_possible_sign_holder_count(agent.id) > 0 {
+                    Some(format!(
+                        "You cannot corrupt agents while there is still a chance to find a sign holder.\nBegin the sacrifices."
+                    ))
                 } else {
                     None
                 }
@@ -77,7 +97,7 @@ impl AgentAction {
                 if area.corrupted_count(agent.id.player) == 0 {
                     Some("You have no corrupted followers to enact sacrifices.".to_string())
                 } else if area.get_player_power(agent.id.player) <= area.get_value() / 3 {
-                    Some(format!("The heretics would stop your public sacrifice."))
+                    Some(format!("The locals would stop your public sacrifice."))
                 } else if area.get_possible_sign_holder_count(agent.id) == 0 {
                     Some(format!(
                         "There are no possible sign holders here.\nSearch elsewhere."
@@ -217,10 +237,18 @@ fn render_agent_ui(
                         *visibility = Visibility::Visible;
                     }
                 } else if let Ok(action) = action_query.get(entity) {
+                    let invalid = action.invalid_reasons(active_agent, world_area);
+                    if let Some(invalid_reason) = &invalid {
+                        if invalid_reason.eq(HIDE_BUTTON) {
+                            *visibility = Visibility::Hidden;
+                        } else {
+                            *visibility = Visibility::Visible;
+                        }
+                    } else {
+                        *visibility = Visibility::Visible;
+                    }
                     if rcp.map(|rcp| rcp.mouse_over()).unwrap_or_default() {
-                        if let Some(invalid_reason) =
-                            action.invalid_reasons(active_agent, world_area)
-                        {
+                        if let Some(invalid_reason) = invalid {
                             tooltip_value = Some(invalid_reason);
                         } else {
                             tooltip_value = Some(action.describe());

@@ -38,6 +38,10 @@ pub struct MyAssets {
         collection(typed, mapped)
     )]
     pub action_stings: HashMap<String, Handle<AudioSource>>,
+    #[asset(path = "Win.wav")]
+    pub win: Handle<AudioSource>,
+    #[asset(path = "Lose.wav")]
+    pub lose: Handle<AudioSource>,
     #[asset(
         paths(
             "Next.png",
@@ -57,7 +61,10 @@ pub struct MyAssets {
             "SacrificeDeactivated.png",
             "Corrupt.png",
             "CorruptActive.png",
-            "CorruptDeactivated.png"
+            "CorruptDeactivated.png",
+            "CorruptAgent.png",
+            "CorruptAgentActive.png",
+            "CorruptAgentDeactivated.png"
         ),
         collection(typed, mapped)
     )]

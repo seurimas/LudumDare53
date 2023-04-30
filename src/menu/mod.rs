@@ -79,8 +79,8 @@ fn add_welcome_screen(mut commands: Commands, assets: Res<MyAssets>) {
                     TextSection {
                         value: "Signs of Corruption".to_string(),
                         style: TextStyle {
-                            font: assets.font.clone(),
-                            font_size: 40.,
+                            font: assets.fancy_font.clone(),
+                            font_size: 54.,
                             color: Color::rgb(1., 0.5, 1.),
                         },
                     },
@@ -530,6 +530,8 @@ fn handle_button_clicks(
     mut menu_state: ResMut<MenuState>,
     interactions: Query<(&MainMenuElement, &Interaction), Changed<Interaction>>,
     mut menus: Query<(&MainMenu, &mut Visibility)>,
+    mut commands: Commands,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     for (button, interaction) in interactions.iter() {
         if *interaction == Interaction::Clicked {
@@ -539,7 +541,23 @@ fn handle_button_clicks(
                     switch_menu(MainMenu::EnterName, &mut menus);
                 }
                 MainMenuElement::LoadGame => {
-                    // TODO
+                    let path = native_dialog::FileDialog::new()
+                        .add_filter("Save File", &["json", "rune"])
+                        .show_open_single_file()
+                        .unwrap();
+                    if let Some(path) = path {
+                        let save = std::fs::read_to_string(path).unwrap();
+                        let save: SaveData = serde_json::from_str(&save).unwrap();
+                        commands.insert_resource(save.players.clone());
+                        commands.insert_resource(save.player_id.clone());
+                        commands.insert_resource(save.ai_seeds.clone());
+                        commands.insert_resource(save.map_desc);
+                        commands.insert_resource(save.turn_report);
+                        commands.insert_resource(PlayerTurn::new(save.player_id));
+                        commands.insert_resource(MenuState::default());
+                        commands.insert_resource(save.season);
+                        next_state.set(GameState::Playing);
+                    }
                 }
                 _ => {}
             }

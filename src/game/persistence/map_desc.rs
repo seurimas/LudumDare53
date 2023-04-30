@@ -248,7 +248,6 @@ pub fn generate_map(mut players: Vec<PlayerId>) -> MapDesc {
     let max_per_player = min_per_player as usize + 2;
     let population_count =
         rng.gen_range((players.len() * min_per_player)..(players.len() * max_per_player));
-    println!("Population count: {}", population_count);
     for _ in 0..population_count {
         let x = rng.gen_range(0..width);
         let y = rng.gen_range(0..height);
@@ -278,7 +277,6 @@ pub fn generate_map(mut players: Vec<PlayerId>) -> MapDesc {
     for player in players.iter() {
         for id in 0..=3 {
             let (x, y) = choose(&mut rng, &valid_agent_locations).unwrap();
-            println!("Agent {} at {}, {}", id, x, y);
             valid_agent_locations.retain(|p| *p != (x, y));
             let agent = Agent::new(
                 generate_agent_name(&mut rng),

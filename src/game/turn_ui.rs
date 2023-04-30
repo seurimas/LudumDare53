@@ -68,6 +68,7 @@ impl TurnReportEvent {
             } => match action {
                 AgentAction::Brutalize => format!("Brutality"),
                 AgentAction::Corrupt => format!("Corruption"),
+                AgentAction::CorruptAgent => format!("Agent Corruption"),
                 AgentAction::Sacrifice => format!("Sacrifice"),
                 AgentAction::Prostelytize => format!("Prostelytizing"),
                 AgentAction::Move(_, _, _) => {
@@ -159,6 +160,23 @@ impl TurnReportEvent {
                             "Your ritual failed.\nYour power at {} wanes.\n",
                             location_name
                         )
+                    },
+                    // Actually, these are signs seen, not failures.
+                    if *fail_amount > 0 {
+                        format!("Something wondrous happened...\n")
+                    } else {
+                        format!("")
+                    },
+                ],
+                AgentAction::CorruptAgent => vec![
+                    format!(
+                        "{} enacted a corruption ritual at {}.\n",
+                        agent_name, location_name
+                    ),
+                    if *success_amount > 0 {
+                        format!("Your ritual succeded.\n{} is now corrupted!\n", agent_name)
+                    } else {
+                        format!("Your ritual failed.\nYour corrupted follower parished.\n")
                     },
                     // Actually, these are signs seen, not failures.
                     if *fail_amount > 0 {
@@ -320,19 +338,17 @@ fn view_turn_report(
     mut text_query: Query<(&Name, &mut Text, &mut Visibility)>,
     assets: Res<MyAssets>,
     mut tiles: Query<&mut MapTile>,
+    audio: Res<Audio>,
 ) {
     if let Some(mut event_id) = turn_report.event_id {
         if keyboard.just_pressed(KeyCode::Space) {
             // Advance the turn report.
             event_id = event_id + 1;
-            println!("Advancing turn report to {}.", event_id);
         } else if keyboard.just_pressed(KeyCode::Back) && event_id > 0 {
             // Go back in the turn report.
             event_id = event_id - 1;
-            println!("Going back in turn report to {}.", event_id);
         } else if keyboard.just_pressed(KeyCode::Escape) {
             // Close the turn report.
-            println!("Closing turn report.");
             event_id = turn_report.events.len() as u32;
         } else if keyboard.just_pressed(KeyCode::C) {
             if let Some(evokation) = evokation_state.get_evokation(&player_id) {
@@ -355,6 +371,16 @@ fn view_turn_report(
                         tile.focused = false;
                     }
                 });
+            }
+            match event {
+                TurnReportEvent::GameOver { winner, scores } => {
+                    if *winner == *player_id {
+                        audio.play(assets.win.clone());
+                    } else {
+                        audio.play(assets.lose.clone());
+                    }
+                }
+                _ => {}
             }
 
             if let Some(mut title) = text_query

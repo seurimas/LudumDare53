@@ -13,7 +13,7 @@ impl Plugin for AiPlugin {
     }
 }
 
-#[derive(Resource, Serialize, Deserialize)]
+#[derive(Resource, Clone, Serialize, Deserialize)]
 pub struct AiSeeds {
     pub seeds: Vec<u64>,
 }

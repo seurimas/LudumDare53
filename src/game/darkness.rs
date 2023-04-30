@@ -119,7 +119,6 @@ impl EvokingState {
                 );
                 true
             } else {
-                println!("Player {:?} already evoked", player_turn.player_id);
                 false
             }
         } else {
@@ -331,7 +330,6 @@ fn end_evokation(
             seeds.clone(),
             world_areas,
         );
-        println!("{:?}", results.report);
         for (entity, map_tile) in tile_query.iter() {
             if let Some(new_world_area) =
                 results.get_new_world_area((map_tile.x as u32, map_tile.y as u32))
