@@ -1,6 +1,6 @@
 use bevy::{input::keyboard::KeyboardInput, utils::HashSet};
 
-use crate::prelude::*;
+use crate::{game::ai::generate_seeds, prelude::*};
 
 pub struct MenuPlugin;
 
@@ -48,6 +48,8 @@ fn add_welcome_screen(mut commands: Commands, assets: Res<MyAssets>) {
                         bottom: Val::Px(0.),
                     },
                     flex_direction: FlexDirection::Column,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -62,6 +64,7 @@ fn add_welcome_screen(mut commands: Commands, assets: Res<MyAssets>) {
                         top: Val::Px(ONE_UNIT),
                         ..Default::default()
                     },
+                    border: UiRect::all(Val::Px(ONE_UNIT)),
                     ..Default::default()
                 },
                 text: Text::from_sections(vec![
@@ -89,6 +92,7 @@ fn add_welcome_screen(mut commands: Commands, assets: Res<MyAssets>) {
                     ButtonBundle {
                         style: Style {
                             border: UiRect::all(Val::Px(ONE_UNIT)),
+                            margin: UiRect::all(Val::Px(ONE_UNIT)),
                             size: Size::width(Val::Percent(50.)),
                             ..Default::default()
                         },
@@ -114,6 +118,7 @@ fn add_welcome_screen(mut commands: Commands, assets: Res<MyAssets>) {
                     ButtonBundle {
                         style: Style {
                             border: UiRect::all(Val::Px(ONE_UNIT)),
+                            margin: UiRect::all(Val::Px(ONE_UNIT)),
                             size: Size::width(Val::Percent(50.)),
                             ..Default::default()
                         },
@@ -157,6 +162,9 @@ fn add_new_game_screen(mut commands: Commands, assets: Res<MyAssets>) {
                         bottom: Val::Px(0.),
                     },
                     flex_direction: FlexDirection::Column,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    gap: Size::all(Val::Px(ONE_UNIT)),
                     ..Default::default()
                 },
                 visibility: Visibility::Hidden,
@@ -168,7 +176,7 @@ fn add_new_game_screen(mut commands: Commands, assets: Res<MyAssets>) {
             parent.spawn(TextBundle {
                 text: Text::from_sections(vec![
                     TextSection {
-                        value: "You receive a runic script in your mind.\n\n".to_string(),
+                        value: "You have received a runic script in your mind.\n\n".to_string(),
                         style: TextStyle {
                             font: assets.font.clone(),
                             font_size: FONT_SIZE,
@@ -176,7 +184,15 @@ fn add_new_game_screen(mut commands: Commands, assets: Res<MyAssets>) {
                         },
                     },
                     TextSection {
-                        value: "Press <C> to copy the script again.".to_string(),
+                        value: "Press <C> to copy the script again.\n(Check your clipboard)\n\n".to_string(),
+                        style: TextStyle {
+                            font: assets.font.clone(),
+                            font_size: FONT_SIZE,
+                            color: Color::WHITE,
+                        },
+                    },
+                    TextSection {
+                        value: "Deliver this runic script to all other players, and\nstore their runic scripts in your clipboard to add them to this game.\n".to_string(),
                         style: TextStyle {
                             font: assets.font.clone(),
                             font_size: FONT_SIZE,
@@ -206,7 +222,7 @@ fn add_new_game_screen(mut commands: Commands, assets: Res<MyAssets>) {
                             },
                         },
                         TextSection {
-                            value: "0 AI Players".to_string(),
+                            value: "0 AI Players\n\n".to_string(),
                             style: TextStyle {
                                 font: assets.font.clone(),
                                 font_size: FONT_SIZE,
@@ -215,22 +231,12 @@ fn add_new_game_screen(mut commands: Commands, assets: Res<MyAssets>) {
                         },
                         TextSection {
                             value:
-                                "Left click to add an AI player. Right click to remove an AI player."
+                                "All players must include all other players, and add the same number of AI.\n\n"
                                     .to_string(),
                             style: TextStyle {
                                 font: assets.font.clone(),
                                 font_size: FONT_SIZE,
-                                color: Color::WHITE,
-                            },
-                        },
-                        TextSection {
-                            value:
-                                "Press enter to begin the game. Press escape to return to the main menu."
-                                    .to_string(),
-                            style: TextStyle {
-                                font: assets.font.clone(),
-                                font_size: FONT_SIZE,
-                                color: Color::WHITE,
+                                color: Color::YELLOW,
                             },
                         },
                     ]),
@@ -238,6 +244,75 @@ fn add_new_game_screen(mut commands: Commands, assets: Res<MyAssets>) {
                 },
                 MainMenuElement::PlayerList,
             ));
+            parent.spawn((
+                ButtonBundle {
+                    style: Style {
+                        border: UiRect::all(Val::Px(ONE_UNIT)),
+                        margin: UiRect::all(Val::Px(ONE_UNIT)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                MainMenuElement::AddAi,
+            )).with_children(|parent| {
+                parent.spawn(TextBundle {
+                    text: Text::from_section(
+                        "Add AI",
+                        TextStyle {
+                            font: assets.font.clone(),
+                            font_size: 20.,
+                            color: Color::BLACK,
+                        },
+                    ),
+                    ..Default::default()
+                });
+            });
+            parent.spawn((
+                ButtonBundle {
+                    style: Style {
+                        border: UiRect::all(Val::Px(ONE_UNIT)),
+                        margin: UiRect::all(Val::Px(ONE_UNIT)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                MainMenuElement::RemoveAi,
+            )).with_children(|parent| {
+                parent.spawn(TextBundle {
+                    text: Text::from_section(
+                        "Remove AI",
+                        TextStyle {
+                            font: assets.font.clone(),
+                            font_size: 20.,
+                            color: Color::BLACK,
+                        },
+                    ),
+                    ..Default::default()
+                });
+            });
+            parent.spawn((
+                ButtonBundle {
+                    style: Style {
+                        border: UiRect::all(Val::Px(ONE_UNIT)),
+                        margin: UiRect::all(Val::Px(ONE_UNIT)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                MainMenuElement::ConfirmPlayers,
+            )).with_children(|parent| {
+                parent.spawn(TextBundle {
+                    text: Text::from_section(
+                        "Confirm Players (Cannot add players later)",
+                        TextStyle {
+                            font: assets.font.clone(),
+                            font_size: 20.,
+                            color: Color::BLACK,
+                        },
+                    ),
+                    ..Default::default()
+                });
+            });
         });
 }
 
@@ -247,6 +322,10 @@ fn add_name_screen(mut commands: Commands, assets: Res<MyAssets>) {
             NodeBundle {
                 style: Style {
                     size: Size::new(Val::Percent(100.), Val::Percent(100.)),
+                    flex_direction: FlexDirection::Column,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    gap: Size::all(Val::Px(ONE_UNIT)),
                     ..Default::default()
                 },
                 visibility: Visibility::Hidden,
@@ -292,18 +371,21 @@ fn remove_main_menu(mut commands: Commands, query: Query<Entity, With<MainMenu>>
 enum MainMenuElement {
     StartNewGame,
     NameField,
+    AddAi,
+    RemoveAi,
     ConfirmPlayers,
     PlayerList,
     LoadGame,
 }
 fn watch_for_players(
+    mut cooldown: Local<f32>,
+    time: Res<Time>,
     mut commands: Commands,
     mut menu_state: ResMut<MenuState>,
     mut text: Query<(&MainMenuElement, &mut Text)>,
-    mut mouse_input: Res<Input<MouseButton>>,
-    mut keyboard_input: ResMut<Input<KeyCode>>,
     mut menus: Query<(&MainMenu, &mut Visibility)>,
     mut next_state: ResMut<NextState<GameState>>,
+    interactions: Query<(&MainMenuElement, &Interaction), Changed<Interaction>>,
 ) {
     if !menu_state.awaiting_players {
         return;
@@ -312,51 +394,60 @@ fn watch_for_players(
         menu_state.awaiting_name = false;
         return;
     }
-    if mouse_input.just_pressed(MouseButton::Left) {
-        menu_state.ai += 1;
-    } else if mouse_input.just_pressed(MouseButton::Right) {
-        menu_state.ai = menu_state.ai.saturating_sub(1);
-    }
-    if keyboard_input.just_pressed(KeyCode::Return) {
-        let players: Vec<String> = menu_state
-            .players
-            .iter()
-            .map(|joiner| joiner.name.to_string())
-            .collect();
-        let game_players = GamePlayers::new(players.clone());
-        let my_player: PlayerId = game_players
-            .iter()
-            .enumerate()
-            .find(|(_, p)| p.eq_ignore_ascii_case(&menu_state.name))
-            .unwrap()
-            .0
-            .into();
-        commands.insert_resource(generate_map(game_players.get_ids()));
-        commands.insert_resource(PlayerTurn::new(my_player));
-        commands.insert_resource(my_player);
-        commands.insert_resource(game_players);
-        commands.insert_resource(MenuState::default());
-        commands.insert_resource(Season(1));
-        next_state.set(GameState::Playing);
+    for (element, interaction) in interactions.iter() {
+        if *element == MainMenuElement::AddAi && *interaction == Interaction::Clicked {
+            menu_state.ai += 1;
+        } else if *element == MainMenuElement::RemoveAi && *interaction == Interaction::Clicked {
+            menu_state.ai = menu_state.ai.saturating_sub(1);
+        } else if *element == MainMenuElement::ConfirmPlayers
+            && *interaction == Interaction::Clicked
+        {
+            let players: Vec<String> = menu_state
+                .players
+                .iter()
+                .map(|joiner| joiner.name.to_string())
+                .collect();
+            let game_players = GamePlayers::new(players.clone(), menu_state.ai);
+            let my_player: PlayerId = game_players
+                .iter()
+                .enumerate()
+                .find(|(_, p)| p.eq_ignore_ascii_case(&menu_state.name))
+                .unwrap()
+                .0
+                .into();
+            commands.insert_resource(generate_seeds(players, menu_state.ai));
+            commands.insert_resource(generate_map(game_players.get_ids()));
+            commands.insert_resource(PlayerTurn::new(my_player));
+            commands.insert_resource(my_player);
+            commands.insert_resource(game_players);
+            commands.insert_resource(MenuState::default());
+            commands.insert_resource(Season(1));
+            next_state.set(GameState::Playing);
+        }
     }
     for (element, mut text) in text.iter_mut() {
         if *element == MainMenuElement::PlayerList {
-            text.sections[2].value = format!("{} AI Players", menu_state.ai);
+            text.sections[2].value = format!("{} AI Players\n\n", menu_state.ai);
         }
     }
-    if let Ok(joiner) = retrieve_from_runes::<Joiner>() {
-        if menu_state.players.contains(&joiner) {
-            return;
-        } else {
-            menu_state.players.insert(joiner.clone());
-            for (element, mut text) in text.iter_mut() {
-                if *element == MainMenuElement::PlayerList {
-                    text.sections[1]
-                        .value
-                        .push_str(&format!("{}\n", joiner.name));
+    if *cooldown < 0. {
+        *cooldown = 1.;
+        if let Ok(joiner) = retrieve_from_runes::<Joiner>() {
+            if menu_state.players.contains(&joiner) {
+                return;
+            } else {
+                menu_state.players.insert(joiner.clone());
+                for (element, mut text) in text.iter_mut() {
+                    if *element == MainMenuElement::PlayerList {
+                        text.sections[1]
+                            .value
+                            .push_str(&format!("{}\n", joiner.name));
+                    }
                 }
             }
         }
+    } else {
+        *cooldown -= time.delta_seconds();
     }
 }
 

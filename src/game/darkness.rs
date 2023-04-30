@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use super::{
     player::GamePlayers,
-    turn_ui::TurnReport,
+    turn_ui::{TurnReport, EVOKE_COLOR, TRANSPARENT_EVOKE_COLOR},
     turns::{apply_turns, Season},
 };
 
@@ -25,8 +25,10 @@ pub enum EvokingState {
         last_evokation: Option<Evokation>,
     },
     Evoking {
+        season: i32,
         evoked: HashMap<PlayerId, Evokation>,
         unevoked: HashSet<PlayerId>,
+        wrong_season: HashSet<PlayerId>,
     },
     Ready {
         turns: Vec<PlayerTurn>,
@@ -42,8 +44,15 @@ impl Default for EvokingState {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum PlayerEvokationState {
+    Evoked,
+    Unevoked,
+    WrongSeason,
+}
+
 impl EvokingState {
-    pub fn begin(&mut self, player_turn: PlayerTurn, players: &GamePlayers) {
+    pub fn begin(&mut self, season: i32, player_turn: PlayerTurn, players: &GamePlayers) {
         let mut evoked = HashMap::new();
         let unevoked = players
             .iter()
@@ -53,17 +62,36 @@ impl EvokingState {
             .collect();
         evoked.insert(
             player_turn.player_id,
-            Evokation::with_seed(player_turn, rand::thread_rng().gen()),
+            Evokation::with_seed(season, player_turn, rand::thread_rng().gen()),
         );
-        *self = Self::Evoking { evoked, unevoked };
+        *self = Self::Evoking {
+            evoked,
+            unevoked,
+            season,
+            wrong_season: HashSet::new(),
+        };
     }
 
-    pub fn get_player_states(&self) -> Vec<(PlayerId, bool)> {
+    pub fn get_player_states(&self) -> Vec<(PlayerId, PlayerEvokationState)> {
         let mut states = match self {
-            Self::Evoking { evoked, unevoked } => evoked
+            Self::Evoking {
+                evoked,
+                unevoked,
+                wrong_season,
+                ..
+            } => evoked
                 .keys()
-                .map(|player| (*player, true))
-                .chain(unevoked.iter().map(|player| (*player, false)))
+                .map(|player| (*player, PlayerEvokationState::Evoked))
+                .chain(unevoked.iter().map(|player| {
+                    (
+                        *player,
+                        if wrong_season.contains(player) {
+                            PlayerEvokationState::WrongSeason
+                        } else {
+                            PlayerEvokationState::Unevoked
+                        },
+                    )
+                }))
                 .collect(),
             _ => Vec::new(),
         };
@@ -71,12 +99,23 @@ impl EvokingState {
         states
     }
 
-    pub fn push(&mut self, turn_seed: u64, player_turn: PlayerTurn) -> bool {
-        if let Self::Evoking { evoked, unevoked } = self {
+    pub fn push(&mut self, ev_season: i32, turn_seed: u64, player_turn: PlayerTurn) -> bool {
+        if let Self::Evoking {
+            evoked,
+            unevoked,
+            wrong_season,
+            season,
+        } = self
+        {
+            if ev_season != *season && unevoked.contains(&player_turn.player_id) {
+                wrong_season.insert(player_turn.player_id);
+                return false;
+            }
             if unevoked.remove(&player_turn.player_id) {
+                wrong_season.remove(&player_turn.player_id);
                 evoked.insert(
                     player_turn.player_id,
-                    Evokation::with_seed(player_turn, turn_seed),
+                    Evokation::with_seed(ev_season, player_turn, turn_seed),
                 );
                 true
             } else {
@@ -95,8 +134,11 @@ impl EvokingState {
                     let mut turns = Vec::new();
                     let mut seeds = Vec::new();
                     for player in players.iter().enumerate() {
-                        let Evokation { seed, player_turn } =
-                            evoked.remove(&PlayerId(player.0 as u32)).unwrap();
+                        let Evokation {
+                            season,
+                            seed,
+                            player_turn,
+                        } = evoked.remove(&PlayerId(player.0 as u32)).unwrap();
                         turns.push(player_turn);
                         seeds.push(seed);
                     }
@@ -120,18 +162,20 @@ impl EvokingState {
 pub struct Evokation {
     pub seed: u64,
     pub player_turn: PlayerTurn,
+    pub season: i32,
 }
 
 impl Evokation {
-    pub fn new(player_turn: PlayerTurn) -> Self {
+    pub fn new(season: i32, player_turn: PlayerTurn) -> Self {
         let seed = rand::thread_rng().gen();
-        Self::with_seed(player_turn, seed)
+        Self::with_seed(season, player_turn, seed)
     }
 
-    pub fn with_seed(player_turn: PlayerTurn, seed: u64) -> Self {
+    pub fn with_seed(season: i32, player_turn: PlayerTurn, seed: u64) -> Self {
         Self {
             seed,
             player_turn: player_turn.clone(),
+            season,
         }
     }
 
@@ -150,6 +194,7 @@ impl Evokation {
 
 fn evoke_darkness_on_click(
     mut evoking_state: ResMut<EvokingState>,
+    season: Res<Season>,
     player_turn: Res<PlayerTurn>,
     game_players: Res<GamePlayers>,
     mut interaction_query: Query<
@@ -167,8 +212,8 @@ fn evoke_darkness_on_click(
 ) {
     if let Some(interaction) = interaction_query.iter_mut().next() {
         if *interaction == Interaction::Clicked {
-            evoking_state.begin(player_turn.clone(), game_players.as_ref());
-            Evokation::new(player_turn.clone()).store_evokation(true);
+            evoking_state.begin(**season, player_turn.clone(), game_players.as_ref());
+            Evokation::new(**season, player_turn.clone()).store_evokation(true);
             for mut visibility in evoking_ui.iter_mut() {
                 *visibility = Visibility::Visible;
             }
@@ -197,7 +242,7 @@ fn watch_evokations(
         *cooldown = 3.;
         match Evokation::retrieve_evokation() {
             Ok(evokation) => {
-                if evoking_state.push(evokation.seed, evokation.player_turn) {
+                if evoking_state.push(evokation.season, evokation.seed, evokation.player_turn) {
                     audio.play(my_assets.evoke_darkness.clone());
                 }
             }
@@ -221,9 +266,20 @@ fn watch_evokations(
             player_list.sections = player_states
                 .iter()
                 .map(|(player, state)| {
-                    let color = if *state { Color::GREEN } else { Color::RED };
+                    let color = match state {
+                        PlayerEvokationState::WrongSeason => Color::YELLOW,
+                        PlayerEvokationState::Evoked => Color::GREEN,
+                        PlayerEvokationState::Unevoked => Color::RED,
+                    };
                     TextSection {
-                        value: format!("{}\n", game_players.get_name(*player).unwrap()),
+                        value: if *state == PlayerEvokationState::WrongSeason {
+                            format!(
+                                "{} (Wrong Season)\n",
+                                game_players.get_name(*player).unwrap()
+                            )
+                        } else {
+                            format!("{}\n", game_players.get_name(*player).unwrap())
+                        },
                         style: TextStyle {
                             font: my_assets.font.clone(),
                             font_size: 20.0,
@@ -285,7 +341,7 @@ fn end_evokation(
                 commands.entity(entity).remove::<WorldArea>();
             }
         }
-        *turn_report = TurnReport::new(results.report);
+        turn_report.append_reports(results.report);
         player_turn.reset();
         **season = **season + 1;
         *evoking_state = EvokingState::None { last_evokation };
@@ -461,7 +517,7 @@ fn add_turn_end_button(mut commands: Commands, assets: Res<MyAssets>) {
                         color: Color::BLACK,
                     },
                 ),
-                background_color: Color::rgb(0.8, 0., 0.9).into(),
+                background_color: EVOKE_COLOR.into(),
                 ..default()
             },));
         });
@@ -500,7 +556,7 @@ fn add_turn_end_button(mut commands: Commands, assets: Res<MyAssets>) {
                         color: Color::BLACK,
                     },
                 ),
-                background_color: Color::rgba(0.8, 0., 0.9, 0.5).into(),
+                background_color: TRANSPARENT_EVOKE_COLOR.into(),
                 ..default()
             },));
         });

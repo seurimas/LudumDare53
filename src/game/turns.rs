@@ -146,11 +146,11 @@ pub fn apply_turns(
     );
 
     report.extend(sacrifices.iter().flat_map(|(x, y, agent_id, signs, _)| {
-        if *signs > 0 && reporting_player != agent_id.player {
+        if *signs > 0 {
             Some(TurnReportEvent::SignSeen {
                 location: (*x, *y),
                 location_name: new_world_areas[&(*x, *y)].name.clone(),
-                mine: false,
+                mine: reporting_player == agent_id.player,
             })
         } else {
             None

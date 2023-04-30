@@ -367,6 +367,10 @@ impl WorldArea {
         self.followers.iter().map(|f| f.power).sum()
     }
 
+    pub fn player_agents(&self, player: PlayerId) -> impl Iterator<Item = &Agent> {
+        self.agents.iter().filter(move |a| a.id.player == player)
+    }
+
     pub fn sign_count(&self, player: PlayerId) -> u32 {
         self.agents
             .iter()

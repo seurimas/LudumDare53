@@ -13,7 +13,12 @@ impl Plugin for UiPlugin {
 pub const ONE_UNIT: f32 = 4.;
 pub const FONT_SIZE: f32 = 20.;
 
-fn spawn_stat_block(parent: &mut ChildBuilder, font: Handle<Font>, name: &'static str) {
+fn spawn_stat_block(
+    parent: &mut ChildBuilder,
+    font: Handle<Font>,
+    fancy_font: Handle<Font>,
+    name: &'static str,
+) {
     parent
         .spawn((
             NodeBundle {
@@ -37,7 +42,7 @@ fn spawn_stat_block(parent: &mut ChildBuilder, font: Handle<Font>, name: &'stati
                 text: Text::from_section(
                     name,
                     TextStyle {
-                        font: font.clone(),
+                        font: fancy_font.clone(),
                         font_size: FONT_SIZE,
                         color: Color::BLACK,
                     },
@@ -67,7 +72,7 @@ fn spawn_stat_block(parent: &mut ChildBuilder, font: Handle<Font>, name: &'stati
         });
 }
 
-fn spawn_stat_ui(parent: &mut ChildBuilder, font: Handle<Font>) {
+fn spawn_stat_ui(parent: &mut ChildBuilder, font: Handle<Font>, fancy_font: Handle<Font>) {
     parent
         .spawn((
             NodeBundle {
@@ -81,9 +86,9 @@ fn spawn_stat_ui(parent: &mut ChildBuilder, font: Handle<Font>) {
             RelativeCursorPosition::default(),
         ))
         .with_children(|parent| {
-            spawn_stat_block(parent, font.clone(), "Agents");
-            spawn_stat_block(parent, font.clone(), "Corrupted");
-            spawn_stat_block(parent, font.clone(), "Signs");
+            spawn_stat_block(parent, font.clone(), fancy_font.clone(), "Agents");
+            spawn_stat_block(parent, font.clone(), fancy_font.clone(), "Corrupted");
+            spawn_stat_block(parent, font.clone(), fancy_font.clone(), "Signs");
         });
 }
 
@@ -206,7 +211,7 @@ fn spawn_agent_section(
                             justify_content: JustifyContent::FlexStart,
                             flex_wrap: FlexWrap::Wrap,
                             gap: Size::all(Val::Px(ONE_UNIT)),
-                            size: Size::width(Val::Px(128. + ONE_UNIT * 4.)),
+                            size: Size::width(Val::Px(196. + ONE_UNIT * 6.)),
                             ..default()
                         },
                         background_color: Color::RED.into(),
@@ -304,7 +309,7 @@ fn gameplay_ui(mut commands: Commands, assets: Res<MyAssets>) {
             ..default()
         })
         .with_children(|parent| {
-            spawn_stat_ui(parent, assets.font.clone());
+            spawn_stat_ui(parent, assets.font.clone(), assets.fancy_font.clone());
             spawn_area_ui(parent, assets.font.clone(), assets.action_buttons.clone());
         });
 

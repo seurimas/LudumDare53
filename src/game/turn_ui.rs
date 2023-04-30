@@ -94,7 +94,20 @@ impl TurnReportEvent {
                 }
             }
             TurnReportEvent::GameOver { winner, .. } => format!("Game Over"),
-            TurnReportEvent::NewTurn { turn } => format!("New Season"),
+            TurnReportEvent::NewTurn { turn } => format!("Season {}", turn),
+        }
+    }
+
+    fn get_location(&self) -> Option<(u32, u32)> {
+        match self {
+            TurnReportEvent::GameStart { .. } => None,
+            TurnReportEvent::AgentAction { location, .. } => Some(*location),
+            TurnReportEvent::Brutalized { location, .. } => Some(*location),
+            TurnReportEvent::FollowersLost { location, .. } => Some(*location),
+            TurnReportEvent::Sacrificed { location, .. } => Some(*location),
+            TurnReportEvent::SignSeen { location, .. } => Some(*location),
+            TurnReportEvent::GameOver { .. } => None,
+            TurnReportEvent::NewTurn { .. } => None,
         }
     }
 
@@ -232,7 +245,7 @@ impl TurnReportEvent {
                 scores.get(winner).unwrap()
             )],
             TurnReportEvent::NewTurn { turn } => vec![
-                format!("A new season begins!"),
+                format!("A new season begins!\n\n"),
                 format!(
                     "It has been {} seasons since your campaign has begun.",
                     turn
@@ -258,6 +271,30 @@ impl TurnReport {
             rendered_event_id: None,
         }
     }
+
+    pub fn show_last_turn(&mut self) {
+        let last_turn_start = self
+            .events
+            .iter()
+            .enumerate()
+            .rev()
+            .skip(1)
+            .find_map(|(i, event)| {
+                if let TurnReportEvent::NewTurn { .. } = event {
+                    Some(i + 1)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0);
+        self.event_id = Some(last_turn_start as u32);
+    }
+
+    pub fn append_reports(&mut self, mut other: Vec<TurnReportEvent>) {
+        let start = self.events.len();
+        self.events.append(&mut other);
+        self.event_id = Some(start as u32);
+    }
 }
 
 fn hide_turn_report(
@@ -282,6 +319,7 @@ fn view_turn_report(
     keyboard: Res<Input<KeyCode>>,
     mut text_query: Query<(&Name, &mut Text, &mut Visibility)>,
     assets: Res<MyAssets>,
+    mut tiles: Query<&mut MapTile>,
 ) {
     if let Some(mut event_id) = turn_report.event_id {
         if keyboard.just_pressed(KeyCode::Space) {
@@ -308,6 +346,16 @@ fn view_turn_report(
             turn_report.rendered_event_id = turn_report.event_id;
 
             let event = turn_report.events.get(event_id as usize).unwrap();
+
+            if let Some(focus) = event.get_location() {
+                tiles.iter_mut().for_each(|mut tile| {
+                    if tile.x == focus.0 as TileLoc && tile.y == focus.0 as TileLoc {
+                        tile.focused = true;
+                    } else {
+                        tile.focused = false;
+                    }
+                });
+            }
 
             if let Some(mut title) = text_query
                 .iter_mut()
@@ -387,7 +435,7 @@ fn review_turn_on_click(
 ) {
     if let Some(interaction) = interaction_query.iter_mut().next() {
         if *interaction == Interaction::Clicked {
-            turn_report.event_id = Some(0);
+            turn_report.show_last_turn();
         }
     }
 }
@@ -426,9 +474,10 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                         flex_direction: FlexDirection::Column,
                         justify_content: JustifyContent::FlexStart,
                         align_items: AlignItems::Center,
+                        border: UiRect::all(Val::Px(ONE_UNIT)),
                         ..default()
                     },
-                    background_color: Color::rgba(0., 0., 0., 0.5).into(),
+                    background_color: Color::BLACK.into(),
                     ..default()
                 })
                 .with_children(|parent| {
@@ -436,13 +485,16 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                     parent.spawn((
                         TextBundle {
                             style: Style {
-                                size: Size::width(Val::Percent(100.)),
+                                size: Size::width(Val::Px(500. - 4. * ONE_UNIT)),
+                                border: UiRect::all(Val::Px(ONE_UNIT * 2.)),
+                                margin: UiRect::all(Val::Px(ONE_UNIT * 2.)),
                                 ..default()
                             },
+                            background_color: EVOKE_COLOR.into(),
                             text: Text::from_section(
                                 "Turn Report",
                                 TextStyle {
-                                    font: assets.font.clone(),
+                                    font: assets.fancy_font.clone(),
                                     font_size: FONT_SIZE * 2.,
                                     color: Color::WHITE,
                                 },
@@ -456,6 +508,11 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                         TextBundle {
                             style: Style {
                                 flex_grow: 1.,
+                                size: Size::width(Val::Px(500. - 4. * ONE_UNIT)),
+                                margin: UiRect {
+                                    bottom: Val::Px(ONE_UNIT * 4. + FONT_SIZE * 2.),
+                                    ..Default::default()
+                                },
                                 ..default()
                             },
                             text: Text::from_section(
@@ -466,6 +523,7 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                                     color: Color::WHITE,
                                 },
                             ),
+                            background_color: TRANSPARENT_EVOKE_COLOR.into(),
                             ..default()
                         },
                         Name::new("turn_report_body"),
@@ -517,6 +575,29 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                         },
                         Name::new("turn_report_esc"),
                     ));
+                    // Helper - Re-copy
+                    parent.spawn((
+                        TextBundle {
+                            style: Style {
+                                position_type: PositionType::Absolute,
+                                position: UiRect {
+                                    bottom: Val::Px(ONE_UNIT + FONT_SIZE + ONE_UNIT),
+                                    ..default()
+                                },
+                                ..default()
+                            },
+                            text: Text::from_section(
+                                "Evoke last turn: C",
+                                TextStyle {
+                                    font: assets.fancy_font.clone(),
+                                    font_size: FONT_SIZE,
+                                    color: Color::WHITE,
+                                },
+                            ),
+                            ..default()
+                        },
+                        Name::new("turn_report_copy"),
+                    ));
                     // Helper - Forward
                     parent.spawn((
                         TextBundle {
@@ -544,6 +625,9 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                 });
         });
 }
+
+pub const EVOKE_COLOR: Color = Color::rgb(0.8, 0., 0.9);
+pub const TRANSPARENT_EVOKE_COLOR: Color = Color::rgba(0.8, 0., 0.9, 0.5);
 
 #[derive(Component)]
 struct ReviewTurnButton;
@@ -584,7 +668,7 @@ fn add_review_button(mut commands: Commands, assets: Res<MyAssets>) {
                         color: Color::BLACK,
                     },
                 ),
-                background_color: Color::rgb(0.8, 0., 0.9).into(),
+                background_color: EVOKE_COLOR.into(),
                 ..default()
             },));
         });

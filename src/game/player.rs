@@ -4,7 +4,8 @@ use crate::prelude::*;
 pub struct GamePlayers(pub Vec<String>);
 
 impl GamePlayers {
-    pub fn new(players: Vec<String>) -> Self {
+    pub fn new(mut players: Vec<String>, ai: u32) -> Self {
+        players.extend((0..ai).map(|i| format!("AI Player {}", i)));
         Self(players)
     }
 
@@ -14,6 +15,25 @@ impl GamePlayers {
 
     pub fn get_ids(&self) -> Vec<PlayerId> {
         (0..self.0.len()).map(|i| PlayerId(i as u32)).collect()
+    }
+
+    pub fn get_ai_seed_index(&self, player_id: PlayerId) -> Option<usize> {
+        let mut ai_seed = 0;
+        for (i, name) in self.0.iter().enumerate() {
+            if name.starts_with("AI Player") {
+                if PlayerId(i as u32) == player_id {
+                    return Some(ai_seed);
+                }
+                ai_seed += 1;
+            }
+        }
+        None
+    }
+
+    pub fn is_ai(&self, player_id: PlayerId) -> bool {
+        self.get_name(player_id)
+            .map(|name| name.starts_with("AI Player"))
+            .unwrap_or(false)
     }
 }
 

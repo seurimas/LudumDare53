@@ -1,6 +1,7 @@
 use bevy::{app::PluginGroupBuilder, prelude::PluginGroup};
 
 pub mod agent;
+pub mod ai;
 pub mod area;
 pub mod darkness;
 pub mod persistence;
@@ -16,6 +17,7 @@ pub struct GamePlugins;
 impl PluginGroup for GamePlugins {
     fn build(self) -> PluginGroupBuilder {
         let mut group = PluginGroupBuilder::start::<Self>();
+        group = group.add(ai::AiPlugin);
         group = group.add(agent::AgentPlugin);
         group = group.add(area::AreaPlugin);
         group = group.add(darkness::DarknessPlugin);
