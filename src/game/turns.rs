@@ -51,6 +51,12 @@ pub fn apply_turns(
                 success_amount: 0,
                 fail_amount: 0,
             })
+        } else if new_world_areas[&(*x, *y)].get_player_power(reporting_player) > 10 {
+            Some(TurnReportEvent::AgentSeen {
+                location: (*x, *y),
+                location_name: new_world_areas[&(*x, *y)].name.clone(),
+                power: 0,
+            })
         } else {
             None
         }
