@@ -111,7 +111,7 @@ fn map_tooltip(
     let mut tooltip_value = None;
     for (tile, area) in map_query.iter() {
         if tile.hovered {
-            tooltip_value = Some(area.name.clone());
+            tooltip_value = Some(format!("{} ({})", area.name.clone(), area.get_value()));
         }
     }
     if *is_showing_map_tooltip && tooltip_value.is_none() {

@@ -33,11 +33,12 @@ pub fn apply_turns(
     // We just want a consistent arrangement. Seeds don't have to match their original players.
     turns.sort_by(|a, b| a.player_id.cmp(&b.player_id));
     seeds.sort();
-    println!("turns: {:?} seeds: {:?}", turns, seeds);
     let mut rngs = seeds
         .iter()
         .map(|seed| StdRng::seed_from_u64(*seed))
         .collect::<Vec<_>>();
+
+    let promoted_followers = promote_followers(&turns, &mut rngs, &mut new_world_areas);
 
     let moved_agents = move_agents(&turns, &mut new_world_areas);
     report.extend(moved_agents.iter().flat_map(|(x, y, agent_id)| {
@@ -54,6 +55,22 @@ pub fn apply_turns(
             None
         }
     }));
+
+    report.extend(
+        promoted_followers
+            .iter()
+            .flat_map(|(x, y, agent_id, new_name)| {
+                if reporting_player == agent_id.player {
+                    Some(TurnReportEvent::PromotedFollower {
+                        location: (*x, *y),
+                        location_name: new_world_areas[&(*x, *y)].name.clone(),
+                        agent_name: new_name.clone(),
+                    })
+                } else {
+                    None
+                }
+            }),
+    );
 
     let corrupted_agents = single_action(
         &turns,
@@ -331,6 +348,57 @@ fn move_agents(
     results
 }
 
+fn promote_followers(
+    turns: &Vec<PlayerTurn>,
+    rngs: &mut Vec<StdRng>,
+    world_areas: &mut HashMap<(u32, u32), WorldArea>,
+) -> Vec<(u32, u32, AgentId, String)> {
+    let mut results = Vec::new();
+    for (turn, rng) in turns.iter().zip(rngs.iter_mut()) {
+        let mut movement_actions = turn
+            .actions
+            .iter()
+            .filter_map(|(agent_id, action)| {
+                if let AgentAction::Move(x, y, _) = action {
+                    Some((agent_id, x, y))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        movement_actions.sort_by(|a, b| {
+            let a = *a.0;
+            let b = *b.0;
+            a.cmp(&b)
+        });
+        let mut agent_count = turn.actions.len();
+        for (agent_id, x, y) in movement_actions {
+            if let Some(source) = get_agent_location(&world_areas, *agent_id) {
+                if !world_areas.contains_key(&(*x, *y)) {
+                    continue;
+                }
+                if world_areas
+                    .get(&source)
+                    .unwrap()
+                    .get_player_agent_count(agent_id.player)
+                    == 1
+                {
+                    // I'm the only agent here, so I can promote in my absence!
+                    if let Some((new_agent_id, new_name)) = world_areas
+                        .get_mut(&source)
+                        .unwrap()
+                        .promote_follower(rng, agent_id.player, agent_count)
+                    {
+                        results.push((*x, *y, new_agent_id, new_name));
+                        agent_count += 1;
+                    }
+                }
+            }
+        }
+    }
+    results
+}
+
 fn corrupt_followers(
     turns: &Vec<PlayerTurn>,
     rngs: &mut Vec<StdRng>,
@@ -431,9 +499,6 @@ fn prostelytize_followers(
                         failures += fail_amount;
                         if let Some(converted) = converted {
                             converts.insert((converted, source.0, source.1));
-                        }
-                        if success_amount == 0 && fail_amount == 0 {
-                            break;
                         }
                     }
                     results.push((source.0, source.1, *agent_id, successes, failures));

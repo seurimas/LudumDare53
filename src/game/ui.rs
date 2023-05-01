@@ -2,6 +2,8 @@ use bevy::ui::RelativeCursorPosition;
 
 use crate::prelude::*;
 
+use super::turn_ui::EVOKE_COLOR;
+
 pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
@@ -18,6 +20,7 @@ fn spawn_stat_block(
     font: Handle<Font>,
     fancy_font: Handle<Font>,
     name: &'static str,
+    color: Color,
 ) {
     parent
         .spawn((
@@ -27,7 +30,7 @@ fn spawn_stat_block(
                     flex_direction: FlexDirection::Column,
                     ..default()
                 },
-                background_color: Color::GREEN.into(),
+                background_color: color.into(),
                 ..default()
             },
             RelativeCursorPosition::default(),
@@ -64,7 +67,7 @@ fn spawn_stat_block(
                             color: Color::WHITE,
                         },
                     ),
-                    background_color: Color::BLACK.into(),
+                    background_color: Color::rgba(0., 0., 0., 0.5).into(),
                     ..default()
                 },
                 Name::new(format!("{}-value", name)),
@@ -86,9 +89,27 @@ fn spawn_stat_ui(parent: &mut ChildBuilder, font: Handle<Font>, fancy_font: Hand
             RelativeCursorPosition::default(),
         ))
         .with_children(|parent| {
-            spawn_stat_block(parent, font.clone(), fancy_font.clone(), "Agents");
-            spawn_stat_block(parent, font.clone(), fancy_font.clone(), "Corrupted");
-            spawn_stat_block(parent, font.clone(), fancy_font.clone(), "Signs");
+            spawn_stat_block(
+                parent,
+                font.clone(),
+                fancy_font.clone(),
+                "Agents",
+                Color::ALICE_BLUE,
+            );
+            spawn_stat_block(
+                parent,
+                font.clone(),
+                fancy_font.clone(),
+                "Corrupted",
+                Color::RED,
+            );
+            spawn_stat_block(
+                parent,
+                font.clone(),
+                fancy_font.clone(),
+                "Signs",
+                EVOKE_COLOR,
+            );
         });
 }
 
@@ -106,7 +127,6 @@ fn spawn_labeled_value(
                 justify_content: JustifyContent::SpaceBetween,
                 ..default()
             },
-            background_color: Color::WHITE.into(),
             ..default()
         })
         .with_children(|parent| {
@@ -198,16 +218,16 @@ fn spawn_agent_section(
         .spawn((
             NodeBundle {
                 style: Style {
-                    border: UiRect::all(Val::Px(ONE_UNIT)),
                     flex_direction: FlexDirection::Column,
                     ..default()
                 },
+                background_color: Color::ALICE_BLUE.into(),
                 ..default()
             },
             Name::new("Area Agent"),
         ))
         .with_children(|parent| {
-            spawn_labeled_value(parent, font.clone(), "Name", "agent_name");
+            spawn_labeled_value(parent, font.clone(), "Agent Name", "agent_name");
             spawn_labeled_value(parent, font.clone(), "Power", "agent_power");
             spawn_labeled_value(parent, font.clone(), "Signs", "agent_signs");
             parent
@@ -222,7 +242,7 @@ fn spawn_agent_section(
                             size: Size::width(Val::Px(196. + ONE_UNIT * 6.)),
                             ..default()
                         },
-                        background_color: Color::RED.into(),
+                        background_color: Color::rgba(0., 0., 0., 0.5).into(),
                         ..default()
                     },
                     Name::new("agent_actions"),
@@ -321,6 +341,7 @@ fn spawn_area_ui(
                     flex_direction: FlexDirection::Column,
                     ..default()
                 },
+                background_color: Color::YELLOW.into(),
                 ..default()
             },
             RelativeCursorPosition::default(),

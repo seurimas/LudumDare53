@@ -9,6 +9,19 @@ impl GamePlayers {
         Self(players)
     }
 
+    pub fn get_save_prefix(&self, player_id: PlayerId) -> String {
+        format!(
+            "{} ({})",
+            self.0
+                .iter()
+                .filter(|name| !name.starts_with("AI Player"))
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(" vs "),
+            player_id.0
+        )
+    }
+
     pub fn get_name(&self, player_id: PlayerId) -> Option<&String> {
         self.0.get(player_id.0 as usize)
     }

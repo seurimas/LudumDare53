@@ -41,6 +41,16 @@ pub enum TurnReportEvent {
         location_name: String,
         follower: bool,
     },
+    PromotedFollower {
+        location: (u32, u32),
+        location_name: String,
+        agent_name: String,
+    },
+    AgentSeen {
+        location: (u32, u32),
+        location_name: String,
+        power: u32,
+    },
     SignSeen {
         location: (u32, u32),
         location_name: String,
@@ -87,6 +97,14 @@ impl TurnReportEvent {
                     format!("Body found!")
                 }
             }
+            TurnReportEvent::PromotedFollower {
+                location_name,
+                agent_name,
+                ..
+            } => {
+                format!("New agent: {}", agent_name)
+            }
+            TurnReportEvent::AgentSeen { .. } => format!("Agent Spotted!"),
             TurnReportEvent::SignSeen { mine, .. } => {
                 if *mine {
                     format!("Sign of Corruption!")
@@ -102,6 +120,8 @@ impl TurnReportEvent {
     fn get_location(&self) -> Option<(u32, u32)> {
         match self {
             TurnReportEvent::GameStart { .. } => None,
+            TurnReportEvent::AgentSeen { location, .. } => Some(*location),
+            TurnReportEvent::PromotedFollower { location, .. } => Some(*location),
             TurnReportEvent::AgentAction { location, .. } => Some(*location),
             TurnReportEvent::Brutalized { location, .. } => Some(*location),
             TurnReportEvent::FollowersLost { location, .. } => Some(*location),
@@ -199,7 +219,11 @@ impl TurnReportEvent {
                     },
                     {
                         if *fail_amount > 0 {
-                            format!("Your power at {} wanes with this failure.\n", location_name)
+                            format!(
+                                "Your actions send {} potential sign holder{} fleeing.\n",
+                                *fail_amount,
+                                if *fail_amount > 1 { "s" } else { "" }
+                            )
                         } else {
                             format!("")
                         }
@@ -240,6 +264,20 @@ impl TurnReportEvent {
                 "Your followers are being swayed by heretical ideas at {}.",
                 location_name
             )],
+            TurnReportEvent::AgentSeen { location_name, .. } => vec![
+                format!("An unknown traveler arrives at {}.\n", location_name),
+                format!("Their heretical words capture the attention of your followers.\n"),
+            ],
+            TurnReportEvent::PromotedFollower {
+                location_name,
+                agent_name,
+                ..
+            } => {
+                vec![format!(
+                    "With the absense of leadership at {}, {} has been promoted to an agent!",
+                    location_name, agent_name
+                )]
+            }
             TurnReportEvent::SignSeen {
                 location_name,
                 mine,
@@ -539,6 +577,7 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                                     bottom: Val::Px(ONE_UNIT * 4. + FONT_SIZE * 2.),
                                     ..Default::default()
                                 },
+                                border: UiRect::all(Val::Px(ONE_UNIT * 2.)),
                                 ..default()
                             },
                             text: Text::from_section(

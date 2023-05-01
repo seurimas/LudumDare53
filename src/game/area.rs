@@ -26,6 +26,8 @@ impl Follower {
     }
 }
 
+pub const SIGN_HOLDER_MINIMUM: u32 = 10;
+
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WorldArea {
     pub name: String,
@@ -105,6 +107,56 @@ impl WorldArea {
         agent
     }
 
+    pub fn promote_follower(
+        &mut self,
+        rng: &mut StdRng,
+        player: PlayerId,
+        agent_count: usize,
+    ) -> Option<(AgentId, String)> {
+        if let Some(power) = {
+            let mut promotable_followers_count = self
+                .followers
+                .iter_mut()
+                .filter(|f| {
+                    f.power > SIGN_HOLDER_MINIMUM
+                        && f.affinity == Some(player)
+                        && !f.corrupted
+                        && !f.sign_holder
+                })
+                .count();
+            let mut promotable_followers = self.followers.iter_mut().filter(|f| {
+                f.power > SIGN_HOLDER_MINIMUM
+                    && f.affinity == Some(player)
+                    && !f.corrupted
+                    && !f.sign_holder
+            });
+            let promoted = choose_mut_iter(rng, promotable_followers, promotable_followers_count)?;
+            let new_power = promoted.power;
+            promoted.power = 0;
+            Some(new_power)
+        } {
+            let agent_name = generate_agent_name(rng);
+            self.add_agent(Agent::new(
+                agent_name.clone(),
+                AgentId {
+                    player,
+                    agent: agent_count as u32,
+                },
+                (0, 0),
+                power,
+            ));
+            Some((
+                AgentId {
+                    player,
+                    agent: agent_count as u32,
+                },
+                agent_name,
+            ))
+        } else {
+            None
+        }
+    }
+
     pub fn brutalize_locals(&mut self, agent_id: AgentId, rng: &mut StdRng) -> (u32, u32) {
         let agent_powers = self.get_agent_powers();
         let agent = self.agents.iter_mut().find(|a| a.id == agent_id);
@@ -124,7 +176,7 @@ impl WorldArea {
             })
             .sum::<u32>()
             + agent.power;
-        let mut attacks_left = 10;
+        let mut attacks_left = agent.stamina / 10;
         let mut swayed = 0;
         let mut flee = 0;
         while attacks_left > 0 && player_power > 0 {
@@ -157,10 +209,13 @@ impl WorldArea {
                 local.power /= 2;
                 local.affinity = Some(agent.id.player);
                 swayed += 1;
-            } else {
+            } else if !local.sign_holder {
                 local.fleeing = walking_choose(rng, self.nearest_neighbors.as_slice());
                 local.power = local.power.saturating_sub(player_power / 2).clamp(4, 8);
                 flee += 1;
+            } else {
+                // Continue to attack harder, despite the sign holder.
+                player_power += local.power;
             }
         }
         for _ in 0..swayed {
@@ -203,17 +258,32 @@ impl WorldArea {
         if player_followers == 0 {
             return (0, 0);
         }
-        let sacrificed_follower = choose_mut_iter(rng, my_followers, player_followers).unwrap();
-        if sacrificed_follower.sign_holder {
-            agent.power += sacrificed_follower.power;
-            agent.signs += 1;
-            sacrificed_follower.power = 0;
-            (1, 0)
-        } else {
-            agent.power += sacrificed_follower.power / 2;
-            sacrificed_follower.power = 0;
-            (0, 1)
+        let signs = {
+            let sacrificed_follower = choose_mut_iter(rng, my_followers, player_followers).unwrap();
+            if sacrificed_follower.sign_holder {
+                agent.power += sacrificed_follower.power;
+                agent.signs += 1;
+                sacrificed_follower.power = 0;
+                1
+            } else {
+                agent.power += sacrificed_follower.power / 2;
+                sacrificed_follower.power = 0;
+                0
+            }
+        };
+        let mut fleeing = 0;
+        // Send other sign holders fleeing.
+        for follower in self.followers.iter_mut() {
+            if follower.affinity != Some(agent_id.player) && follower.sign_holder {
+                if rng.gen_bool(0.33 + signs as f64 * 0.33) {
+                    follower.fleeing = walking_choose(rng, self.nearest_neighbors.as_slice());
+                    if follower.fleeing.is_some() {
+                        fleeing += 1;
+                    }
+                }
+            }
         }
+        (signs, fleeing)
     }
 
     pub fn corrupt_followers(&mut self, agent_id: AgentId, rng: &mut StdRng) -> (u32, u32) {
@@ -317,7 +387,9 @@ impl WorldArea {
                 follower.affinity = Some(agent_id.player);
                 return (1, 0, converted_player);
             } else {
-                return (0, 1, None);
+                // Double loss for stealing, but don't end your turn!
+                agent.exhaust(follower.power);
+                return (0, 0, None);
             }
         }
     }
@@ -428,13 +500,17 @@ impl WorldArea {
 
 fn can_be_sign_holder_mut(agent_id: AgentId) -> impl Fn(&&mut Follower) -> bool {
     move |follower| {
-        follower.affinity == Some(agent_id.player) && follower.power > 10 && !follower.corrupted
+        follower.affinity == Some(agent_id.player)
+            && follower.power > SIGN_HOLDER_MINIMUM
+            && !follower.corrupted
     }
 }
 
 fn can_be_sign_holder(agent_id: AgentId) -> impl Fn(&&Follower) -> bool {
     move |follower| {
-        follower.affinity == Some(agent_id.player) && follower.power > 10 && !follower.corrupted
+        follower.affinity == Some(agent_id.player)
+            && follower.power > SIGN_HOLDER_MINIMUM
+            && !follower.corrupted
     }
 }
 

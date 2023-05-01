@@ -178,7 +178,6 @@ impl Evokation {
     }
 
     pub fn store_evokation(&self, futhark: bool) -> Option<String> {
-        println!("Storing with seed: {}", self.seed);
         store_in_runes(self, futhark)
     }
 
@@ -238,16 +237,11 @@ fn watch_evokations(
     mut player_list: Query<&mut Text, With<EvokingPlayerList>>,
 ) {
     if *cooldown < 0. {
-        println!("Checking evokations");
         *cooldown = 3.;
         match Evokation::retrieve_evokation() {
             Ok(evokation) => {
                 let player = evokation.player_turn.player_id;
                 if evoking_state.push(evokation.season, evokation.seed, evokation.player_turn) {
-                    println!(
-                        "Received evokation for {:?} with seed {}",
-                        player, evokation.seed
-                    );
                     audio.play(my_assets.evoke_darkness.clone());
                 } else {
                     println!("Could not push evokation for {:?}", player);
@@ -295,6 +289,18 @@ fn watch_evokations(
                     }
                 })
                 .collect();
+            player_list.sections.insert(
+                0,
+                TextSection {
+                    value: "Player evokation status (use clipboard to load other players)\n\n"
+                        .to_string(),
+                    style: TextStyle {
+                        font: my_assets.font.clone(),
+                        font_size: 20.0,
+                        color: Color::WHITE,
+                    },
+                },
+            );
         }
         EvokingState::Ready { .. } => {
             for mut text in player_list.iter_mut() {
@@ -396,9 +402,10 @@ fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
                         flex_direction: FlexDirection::Column,
                         justify_content: JustifyContent::FlexStart,
                         align_items: AlignItems::Center,
+                        border: UiRect::all(Val::Px(ONE_UNIT)),
                         ..default()
                     },
-                    background_color: Color::rgba(0., 0., 0., 0.5).into(),
+                    background_color: Color::BLACK.into(),
                     ..default()
                 })
                 .with_children(|parent| {
@@ -406,9 +413,12 @@ fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
                     parent.spawn((
                         TextBundle {
                             style: Style {
-                                size: Size::width(Val::Percent(100.)),
+                                size: Size::width(Val::Px(500. - 4. * ONE_UNIT)),
+                                border: UiRect::all(Val::Px(ONE_UNIT * 2.)),
+                                margin: UiRect::all(Val::Px(ONE_UNIT * 2.)),
                                 ..default()
                             },
+                            background_color: EVOKE_COLOR.into(),
                             text: Text::from_section(
                                 "Evoking The Darkness",
                                 TextStyle {
@@ -425,7 +435,8 @@ fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
                     parent.spawn((
                         TextBundle {
                             style: Style {
-                                flex_grow: 1.,
+                                flex_shrink: 1.,
+                                size: Size::width(Val::Px(500. - 4. * ONE_UNIT)),
                                 ..default()
                             },
                             text: Text::from_sections(
@@ -437,7 +448,7 @@ fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
                                         color: Color::WHITE,
                                     },
                                 }, TextSection {
-                                    value: "You receive a runic script in your mind.\n".to_string(),
+                                    value: "You receive a runic script in your mind.\nDeliver it to all other players.".to_string(),
                                     style: TextStyle {
                                         font: assets.font.clone(),
                                         font_size: FONT_SIZE,
@@ -459,6 +470,7 @@ fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
                                     },
                                 }],
                             ),
+                            background_color: TRANSPARENT_EVOKE_COLOR.into(),
                             ..default()
                         },
                         Name::new("evoking_body"),
@@ -468,11 +480,17 @@ fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
                         TextBundle {
                             style: Style {
                                 flex_grow: 1.,
+                                size: Size::width(Val::Px(500. - 4. * ONE_UNIT)),
+                                margin: UiRect {
+                                    bottom: Val::Px(ONE_UNIT * 4. + FONT_SIZE * 2.),
+                                    ..Default::default()
+                                },
                                 ..default()
                             },
                             text: Text::from_sections(
                                 vec![],
                             ),
+                            background_color: TRANSPARENT_EVOKE_COLOR.into(),
                             ..default()
                         },
                         EvokingPlayerList,

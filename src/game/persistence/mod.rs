@@ -73,7 +73,10 @@ fn save_periodically(
             turn_report: turn_report.clone(),
         };
         let default = "Unknown".to_string();
-        save(players.get_name(*player).unwrap_or(&default), save_data);
+        save(
+            format!("{}.json", players.get_save_prefix(*player)),
+            save_data,
+        );
     }
 }
 

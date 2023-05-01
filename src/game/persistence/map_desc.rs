@@ -187,7 +187,7 @@ const SUFFIX: [&str; 16] = [
     "in",
 ];
 
-fn generate_agent_name(rng: &mut StdRng) -> String {
+pub fn generate_agent_name(rng: &mut StdRng) -> String {
     format!(
         "{}{}",
         choose(rng, &PREFIX).unwrap(),
@@ -240,8 +240,8 @@ pub fn generate_map(mut players: Vec<PlayerId>) -> MapDesc {
         .reduce(|a, b| (a << 32) ^ b)
         .unwrap_or(8675309);
     let mut rng = StdRng::seed_from_u64(seed as u64);
-    let width = rng.gen_range(7..=10);
-    let height = rng.gen_range(7..=10);
+    let width = players.len() + rng.gen_range(5..=7);
+    let height = players.len() + rng.gen_range(5..=7);
     let mut tiles = vec![0; width * height];
     let mut areas = Vec::new();
     let min_per_player = WIN_SIGN_COUNT as usize + 2;

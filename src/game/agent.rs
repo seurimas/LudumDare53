@@ -20,7 +20,7 @@ impl AgentAction {
     pub fn describe(&self) -> String {
         match self {
             AgentAction::None => "View next agent in area, if any.".to_string(),
-            AgentAction::Move(_, _, name) => format!("Travel\n\nMove to {}.", name),
+            AgentAction::Move(_, _, name) => format!("Travel\n\nMove to {}.\nWhen you leave, a powerful follower in this area\nmay become an agent.", name),
             AgentAction::Prostelytize => {
                 "Prostelytize\n\nSpread the word of darkness to the locals to gain new followers.".to_string()
             }
@@ -102,7 +102,7 @@ impl AgentAction {
                     Some(format!("The locals would stop your public sacrifice."))
                 } else if area.get_possible_sign_holder_count(agent.id) == 0 {
                     Some(format!(
-                        "There are no possible sign holders here.\nSearch elsewhere."
+                        "There are no possible sign holders here.\nRecruit more or search elsewhere."
                     ))
                 } else {
                     None
@@ -287,21 +287,25 @@ fn render_agent_ui(
                 }
             }
         } else {
-            for (_, name, _, _, mut visibility) in ui_query.iter_mut() {
+            for (entity, name, _, _, mut visibility) in ui_query.iter_mut() {
                 if name
                     .map(|name| name.eq_ignore_ascii_case("Area Agent"))
                     .unwrap_or_default()
                 {
                     *visibility = Visibility::Hidden;
+                } else if action_query.get(entity).is_ok() {
+                    *visibility = Visibility::Hidden;
                 }
             }
         }
     } else {
-        for (_, name, _, _, mut visibility) in ui_query.iter_mut() {
+        for (entity, name, _, _, mut visibility) in ui_query.iter_mut() {
             if name
                 .map(|name| name.eq_ignore_ascii_case("Area Agent"))
                 .unwrap_or_default()
             {
+                *visibility = Visibility::Hidden;
+            } else if action_query.get(entity).is_ok() {
                 *visibility = Visibility::Hidden;
             }
         }
