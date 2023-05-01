@@ -297,7 +297,7 @@ impl TurnReportEvent {
             }
             TurnReportEvent::GameOver { winner, scores } => vec![format!(
                 "Game Over! Player {} wins with {} points!",
-                winner.0,
+                winner.0 + 1,
                 scores.get(winner).unwrap()
             )],
             TurnReportEvent::NewTurn { turn } => vec![

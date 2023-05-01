@@ -51,7 +51,8 @@ fn describe_map(tile_query: &Query<(&MapTile, Option<&WorldArea>)>) -> MapDesc {
 }
 
 fn save_periodically(
-    mut last_season: Local<i32>,
+    mut last_season: Local<(i32, bool)>,
+    player_turn: Res<PlayerTurn>,
     season: Res<Season>,
     ai_seeds: Res<AiSeeds>,
     players: Res<GamePlayers>,
@@ -60,8 +61,9 @@ fn save_periodically(
     turn_report: Res<TurnReport>,
     tile_query: Query<(&MapTile, Option<&WorldArea>)>,
 ) {
-    if *last_season != season.0 {
-        *last_season = season.0;
+    if last_season.0 != season.0 || last_season.1 != evokation.is_evoking() {
+        last_season.0 = season.0;
+        last_season.1 = evokation.is_evoking();
         let map_desc = describe_map(&tile_query);
         let save_data = SaveData {
             season: *season,

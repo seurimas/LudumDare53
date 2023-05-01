@@ -95,6 +95,14 @@ pub fn store_in_runes<T: crate::prelude::Serialize>(t: T, futhark: bool) -> Opti
         .map(|_| runes)
 }
 
+pub fn read_from_runes<T: crate::prelude::DeserializeOwned>(
+    runes: &str,
+    futhark: bool,
+) -> Option<T> {
+    let bytes = parse_runes(runes, futhark);
+    postcard::from_bytes(&bytes).ok()
+}
+
 pub fn create_runes<T: crate::prelude::Serialize>(t: T, futhark: bool) -> String {
     let data = postcard::to_allocvec(&t).unwrap();
     generate_runes(data.as_slice(), futhark)

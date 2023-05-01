@@ -2,7 +2,7 @@ pub use crate::assets::MyAssets;
 pub use crate::game::agent::{Agent, AgentAction, AgentId};
 pub use crate::game::ai::AiSeeds;
 pub use crate::game::area::{Follower, WorldArea};
-pub use crate::game::darkness::EvokingState;
+pub use crate::game::darkness::{Evokation, EvokingState};
 pub use crate::game::persistence::*;
 pub use crate::game::player::GamePlayers;
 pub use crate::game::player::PlayerId;

@@ -554,7 +554,25 @@ fn handle_button_clicks(
                         commands.insert_resource(save.ai_seeds.clone());
                         commands.insert_resource(save.map_desc);
                         commands.insert_resource(save.turn_report);
-                        commands.insert_resource(PlayerTurn::new(save.player_id));
+                        if let Some(evokation) = save
+                            .last_evokation
+                            .and_then(|evokation| read_from_runes::<Evokation>(&evokation, false))
+                        {
+                            if evokation.season == *save.season {
+                                commands.insert_resource(EvokingState::resume(
+                                    evokation.clone(),
+                                    &save.players,
+                                ));
+                                commands.insert_resource(evokation.player_turn);
+                            } else {
+                                commands.insert_resource(EvokingState::None {
+                                    last_evokation: Some(evokation),
+                                });
+                                commands.insert_resource(PlayerTurn::new(save.player_id));
+                            }
+                        } else {
+                            commands.insert_resource(PlayerTurn::new(save.player_id));
+                        }
                         commands.insert_resource(MenuState::default());
                         commands.insert_resource(save.season);
                         next_state.set(GameState::Playing);

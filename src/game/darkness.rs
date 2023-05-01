@@ -71,6 +71,23 @@ impl EvokingState {
             wrong_season: HashSet::new(),
         };
     }
+    pub fn resume(evokation: Evokation, players: &GamePlayers) -> Self {
+        let mut evoked = HashMap::new();
+        let season = evokation.season;
+        let unevoked = players
+            .iter()
+            .enumerate()
+            .filter(|player| player.0 as u32 != evokation.player_turn.player_id.0)
+            .map(|player| PlayerId(player.0 as u32))
+            .collect();
+        evoked.insert(evokation.player_turn.player_id, evokation);
+        Self::Evoking {
+            evoked,
+            unevoked,
+            season,
+            wrong_season: HashSet::new(),
+        }
+    }
 
     pub fn get_player_states(&self) -> Vec<(PlayerId, PlayerEvokationState)> {
         let mut states = match self {
@@ -155,6 +172,10 @@ impl EvokingState {
             _ => None,
         }
     }
+
+    pub fn is_evoking(&self) -> bool {
+        matches!(self, Self::Evoking { .. })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -212,7 +233,7 @@ fn evoke_darkness_on_click(
             evoking_state
                 .get_evokation(&player_turn.player_id)
                 .unwrap()
-                .store_evokation(false);
+                .store_evokation(true);
             for mut visibility in evoking_ui.iter_mut() {
                 *visibility = Visibility::Visible;
             }
@@ -370,7 +391,11 @@ struct EvokingUi;
 #[derive(Component)]
 struct EvokingPlayerList;
 
-fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
+fn add_evoking_ui(
+    mut commands: Commands,
+    assets: Res<MyAssets>,
+    evoking_state: Option<Res<EvokingState>>,
+) {
     // Center me.
     commands
         .spawn((
@@ -387,7 +412,11 @@ fn add_evoking_ui(mut commands: Commands, assets: Res<MyAssets>) {
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                visibility: Visibility::Hidden,
+                visibility: if evoking_state.map(|state| state.is_evoking()).unwrap_or(false) {
+                    Visibility::Visible
+                } else {
+                    Visibility::Hidden
+                },
                 ..default()
             },
             EvokingUi,
