@@ -2157,6 +2157,8 @@ dependencies = [
  "serde",
  "serde_json",
  "unicode-segmentation",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

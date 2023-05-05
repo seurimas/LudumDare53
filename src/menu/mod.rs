@@ -1,3 +1,5 @@
+use std::path;
+
 use bevy::{input::keyboard::KeyboardInput, utils::HashSet};
 
 use crate::{game::ai::generate_seeds, prelude::*};
@@ -184,6 +186,9 @@ fn add_new_game_screen(mut commands: Commands, assets: Res<MyAssets>) {
                         },
                     },
                     TextSection {
+                        #[cfg(target_arch = "wasm32")]
+                        value: "Press <C> to create the runes again.\nCopy the runes above.\n\n".to_string(),
+                        #[cfg(not(target_arch = "wasm32"))]
                         value: "Press <C> to copy the script again.\n(Check your clipboard)\n\n".to_string(),
                         style: TextStyle {
                             font: assets.font.clone(),
@@ -192,6 +197,9 @@ fn add_new_game_screen(mut commands: Commands, assets: Res<MyAssets>) {
                         },
                     },
                     TextSection {
+                        #[cfg(target_arch = "wasm32")]
+                        value: "Deliver this runic script to all other players, and\npaste their runic scripts above to add them to this game.\n".to_string(),
+                        #[cfg(not(target_arch = "wasm32"))]
                         value: "Deliver this runic script to all other players, and\nstore their runic scripts in your clipboard to add them to this game.\n".to_string(),
                         style: TextStyle {
                             font: assets.font.clone(),
@@ -423,6 +431,8 @@ fn watch_for_players(
             commands.insert_resource(game_players);
             commands.insert_resource(MenuState::default());
             commands.insert_resource(Season(1));
+            #[cfg(target_arch = "wasm32")]
+            hide_clipboard();
             next_state.set(GameState::Playing);
         }
     }
@@ -525,6 +535,22 @@ fn switch_menu(new_menu: MainMenu, menus: &mut Query<(&MainMenu, &mut Visibility
             *visibility = Visibility::Hidden;
         }
     }
+    match new_menu {
+        MainMenu::NewGame => {
+            #[cfg(target_arch = "wasm32")]
+            show_clipboard("2em", "50%");
+        }
+        MainMenu::LoadGame => {
+            #[cfg(target_arch = "wasm32")]
+            hide_clipboard();
+        }
+        _ => {
+            #[cfg(target_arch = "wasm32")]
+            hide_clipboard();
+            #[cfg(target_arch = "wasm32")]
+            hide_load();
+        }
+    }
 }
 
 fn handle_button_clicks(
@@ -541,13 +567,10 @@ fn handle_button_clicks(
                     menu_state.awaiting_name = true;
                     switch_menu(MainMenu::EnterName, &mut menus);
                 }
+                #[cfg(not(target_arch = "wasm32"))]
                 MainMenuElement::LoadGame => {
-                    let path = native_dialog::FileDialog::new()
-                        .add_filter("Save File", &["json", "rune"])
-                        .show_open_single_file()
-                        .unwrap();
-                    if let Some(path) = path {
-                        let save = std::fs::read_to_string(path).unwrap();
+                    let save = load_save();
+                    if let Some(save) = save {
                         let save: SaveData = serde_json::from_str(&save).unwrap();
                         commands.insert_resource(save.players.clone());
                         commands.insert_resource(save.player_id.clone());
@@ -578,8 +601,27 @@ fn handle_button_clicks(
                         next_state.set(GameState::Playing);
                     }
                 }
+                #[cfg(target_arch = "wasm32")]
+                MainMenuElement::LoadGame => {
+                    show_load();
+                }
                 _ => {}
             }
         }
     }
+}
+
+#[cfg(feature = "native-dialog")]
+fn load_save() -> Option<String> {
+    let save = native_dialog::FileDialog::new()
+        .add_filter("Save File", &["json", "rune"])
+        .show_open_single_file()
+        .unwrap()
+        .and_then(|path| std::fs::read_to_string(path).ok());
+    save
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_save() -> Option<String> {
+    None
 }

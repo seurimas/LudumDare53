@@ -391,11 +391,16 @@ fn view_turn_report(
         } else if keyboard.just_pressed(KeyCode::C) {
             if let Some(evokation) = evokation_state.get_evokation(&player_id) {
                 evokation.store_evokation(true);
+                #[cfg(target_arch = "wasm32")]
+                show_clipboard("calc(100% - 7em)", "50%");
             }
         }
         turn_report.event_id = Some(event_id);
         if event_id >= turn_report.events.len() as u32 {
             turn_report.event_id = None;
+
+            #[cfg(target_arch = "wasm32")]
+            hide_clipboard();
         } else if turn_report.rendered_event_id != turn_report.event_id {
             turn_report.rendered_event_id = turn_report.event_id;
 

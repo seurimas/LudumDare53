@@ -242,6 +242,8 @@ fn evoke_darkness_on_click(
                 tile.selected = false;
             }
             audio.play(my_assets.evoke_darkness.clone());
+            #[cfg(target_arch = "wasm32")]
+            show_clipboard("calc(100% - 7em)", "50%");
         }
     }
 }
@@ -279,6 +281,8 @@ fn watch_evokations(
         if let Some(evokation) = evoking_state.get_evokation(&player_id) {
             evokation.store_evokation(true);
             audio.play(my_assets.evoke_darkness.clone());
+            #[cfg(target_arch = "wasm32")]
+            show_clipboard("calc(100% - 7em)", "50%");
         }
     }
     match evoking_state.as_ref() {
@@ -381,6 +385,9 @@ fn end_evokation(
         *evoking_state = EvokingState::None { last_evokation };
         for mut visibility in evoking_ui.iter_mut() {
             *visibility = Visibility::Hidden;
+
+            #[cfg(target_arch = "wasm32")]
+            hide_clipboard();
         }
     }
 }

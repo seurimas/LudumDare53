@@ -73,9 +73,7 @@ pub fn generate_runes(bytes: &[u8], futhark: bool) -> String {
 }
 
 pub fn retrieve_from_runes<T: crate::prelude::DeserializeOwned>() -> Result<T, String> {
-    arboard::Clipboard::new()
-        .and_then(|mut clipboard| clipboard.get_text())
-        .map_err(|e| e.to_string())
+    get_clipboard_text()
         .map(|text| {
             let futhark = parse_runes(&text, true);
             if futhark.len() > 0 {
@@ -87,12 +85,38 @@ pub fn retrieve_from_runes<T: crate::prelude::DeserializeOwned>() -> Result<T, S
         .and_then(|bytes| postcard::from_bytes(&bytes).map_err(|e| e.to_string()))
 }
 
+#[cfg(feature = "arboard")]
+fn get_clipboard_text() -> Result<String, String> {
+    arboard::Clipboard::new()
+        .and_then(|mut clipboard| clipboard.get_text())
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn get_clipboard_text() -> Result<String, String> {
+    use crate::prelude::get_clipboard_text_js;
+
+    Ok(get_clipboard_text_js())
+}
+
 pub fn store_in_runes<T: crate::prelude::Serialize>(t: T, futhark: bool) -> Option<String> {
     let runes = create_runes(t, futhark);
+    set_clipboard_text(&runes).map(|_| runes)
+}
+
+#[cfg(feature = "arboard")]
+fn set_clipboard_text(runes: &String) -> Option<()> {
     arboard::Clipboard::new()
         .and_then(|mut clipboard| clipboard.set_text(runes.clone()))
         .ok()
-        .map(|_| runes)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_clipboard_text(runes: &String) -> Option<()> {
+    use crate::prelude::set_clipboard_text_js;
+
+    set_clipboard_text_js(runes.as_str());
+    Some(())
 }
 
 pub fn read_from_runes<T: crate::prelude::DeserializeOwned>(

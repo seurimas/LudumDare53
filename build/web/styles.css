@@ -1,0 +1,47 @@
+body,
+html {
+    height: 100%;
+}
+
+body {
+    background: repeating-linear-gradient(135deg,
+            black 0,
+            black 2px,
+            white 2px,
+            white 20px);
+    margin: 0;
+}
+
+.game-container {
+    width: 948px;
+    height: 533px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    margin: auto;
+}
+
+#clipboard-container,
+#load-container {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+}
+
+#clipboard,
+#load {
+    background-color: rgb(229, 0, 229);
+    color: black;
+    font-weight: bold;
+    border: 0;
+    font-size: 2em;
+}
+
+#bevy {
+    background-color: white;
+    width: 800px;
+    height: 600px;
+}

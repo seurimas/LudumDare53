@@ -19,6 +19,7 @@ fn main() {
                 resolution: (948., 533.).into(),
                 fit_canvas_to_parent: false,
                 prevent_default_event_handling: true,
+                canvas: Some("#bevy".to_owned()),
                 ..Default::default()
             }),
             ..default()
