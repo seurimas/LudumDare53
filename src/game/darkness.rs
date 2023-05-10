@@ -490,14 +490,26 @@ fn add_evoking_ui(
                                         font_size: FONT_SIZE,
                                         color: Color::WHITE,
                                     },
-                                }, TextSection {
+                                }, 
+                                #[cfg(not(target_arch = "wasm32"))]
+                                    TextSection {
                                     value: "(Check your clipboard)\n\n".to_string(),
                                     style: TextStyle {
                                         font: assets.font.clone(),
                                         font_size: FONT_SIZE,
                                         color: Color::WHITE,
                                     },
-                                }, TextSection {
+                                }, 
+                                #[cfg(target_arch = "wasm32")]
+                                    TextSection {
+                                    value: "Copy your runes above, or paste your opponents' runes.\n\n".to_string(),
+                                    style: TextStyle {
+                                        font: assets.font.clone(),
+                                        font_size: FONT_SIZE,
+                                        color: Color::WHITE,
+                                    },
+                                }, 
+                                TextSection {
                                     value: "Press <C> to copy the script again.\n".to_string(),
                                     style: TextStyle {
                                         font: assets.font.clone(),
