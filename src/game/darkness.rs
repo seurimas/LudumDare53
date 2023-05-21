@@ -224,6 +224,7 @@ fn evoke_darkness_on_click(
     mut evoking_ui: Query<&mut Visibility, With<EvokingUi>>,
     my_assets: Res<MyAssets>,
     audio: Res<Audio>,
+    mut tile_input: ResMut<TileInputState>,
 ) {
     if let Some(interaction) = interaction_query.iter_mut().next() {
         if *interaction == Interaction::Clicked
@@ -237,10 +238,7 @@ fn evoke_darkness_on_click(
             for mut visibility in evoking_ui.iter_mut() {
                 *visibility = Visibility::Visible;
             }
-            for mut tile in tiles.iter_mut() {
-                tile.hovered = false;
-                tile.selected = false;
-            }
+            tile_input.clear();
             audio.play(my_assets.evoke_darkness.clone());
             #[cfg(target_arch = "wasm32")]
             show_clipboard("calc(100% - 7em)", "50%");

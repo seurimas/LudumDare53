@@ -407,13 +407,14 @@ fn view_turn_report(
             let event = turn_report.events.get(event_id as usize).unwrap();
 
             if let Some(focus) = event.get_location() {
-                tiles.iter_mut().for_each(|mut tile| {
-                    if tile.x == focus.0 as TileLoc && tile.y == focus.0 as TileLoc {
-                        tile.focused = true;
-                    } else {
-                        tile.focused = false;
-                    }
-                });
+                // TODO
+                // tiles.iter_mut().for_each(|mut tile| {
+                //     if tile.x == focus.0 as TileLoc && tile.y == focus.0 as TileLoc {
+                //         tile.focused = true;
+                //     } else {
+                //         tile.focused = false;
+                //     }
+                // });
             }
             match event {
                 TurnReportEvent::GameOver { winner, scores } => {

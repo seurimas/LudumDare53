@@ -17,6 +17,17 @@ pub struct MyAssets {
     #[asset(texture_atlas(tile_size_x = 128., tile_size_y = 128., columns = 4, rows = 4))]
     #[asset(path = "map.png")]
     pub map: Handle<TextureAtlas>,
+    #[asset(
+        paths(
+            "tile.glb#Scene2",
+            "tile.glb#Scene0",
+            "tile.glb#Scene1",
+            "tile.glb#Scene4",
+            "tile.glb#Scene3",
+        ),
+        collection(typed)
+    )]
+    pub tiles: Vec<Handle<Scene>>,
     #[asset(path = "anglodavek/Anglodavek-a55E.ttf")]
     pub fancy_font: Handle<Font>,
     #[asset(path = "breath-fire-iii/BreatheFireIii-PKLOB.ttf")]

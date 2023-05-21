@@ -216,9 +216,13 @@ fn render_agent_ui(
     mut interaction_query: Query<(Entity, &Interaction), (Changed<Interaction>, With<Button>)>,
     assets: Res<MyAssets>,
     audio: Res<Audio>,
+    tile_input: Res<TileInputState>,
 ) {
     let mut tooltip_value = None;
-    if let Some((tile, world_area)) = map_query.iter().find(|(tile, _)| tile.selected) {
+    if let Some((tile, world_area)) = tile_input
+        .selected
+        .and_then(|(entity, _, _)| map_query.get(entity).ok())
+    {
         if local.x != tile.x || local.y != tile.y {
             local.x = tile.x;
             local.y = tile.y;
@@ -378,8 +382,9 @@ fn agent_tooltip(
     player_agents: Res<AgentLocations>,
     mut tooltip: ResMut<Tooltip>,
     agent_label: Query<(&RelativeCursorPosition, &Name)>,
-    mut tile_query: Query<(&mut MapTile, &WorldArea)>,
+    mut tile_query: Query<(Entity, &mut MapTile, &WorldArea)>,
     input: Res<Input<MouseButton>>,
+    mut tile_input: ResMut<TileInputState>,
 ) {
     for (cursor, name) in agent_label.iter() {
         if name.eq_ignore_ascii_case("Agents") {
@@ -394,15 +399,12 @@ fn agent_tooltip(
                         unassigned_agents
                     ));
                     if input.just_pressed(MouseButton::Left) {
-                        tile_query.iter_mut().for_each(|(mut tile, _)| {
-                            if tile.x == agent_x as TileLoc && tile.y == agent_y as TileLoc {
-                                tile.focused = true;
-                                tile.selected = true;
-                            } else {
-                                tile.focused = false;
-                                tile.selected = false;
-                            }
-                        });
+                        if let Some((tile_entity, _, _)) = tile_query.iter().find(|(_, tile, _)| {
+                            tile.x == agent_x as TileLoc && tile.y == agent_y as TileLoc
+                        }) {
+                            tile_input.selected =
+                                Some((tile_entity, agent_x as TileLoc, agent_y as TileLoc));
+                        }
                     }
                 }
             } else if *tooltip_control {
@@ -419,8 +421,9 @@ fn corrupted_tooltip(
     player_turn: Res<PlayerTurn>,
     mut tooltip: ResMut<Tooltip>,
     agent_label: Query<(&RelativeCursorPosition, &Name)>,
-    mut tile_query: Query<(&mut MapTile, &WorldArea)>,
+    mut tile_query: Query<(Entity, &mut MapTile, &WorldArea)>,
     input: Res<Input<MouseButton>>,
+    mut tile_input: ResMut<TileInputState>,
 ) {
     for (cursor, name) in agent_label.iter() {
         if name.eq_ignore_ascii_case("Corrupted") {
@@ -428,7 +431,7 @@ fn corrupted_tooltip(
                 *tooltip_control = true;
                 let corrupted_count = tile_query
                     .iter()
-                    .filter(|(_, area)| area.corrupted_count(player_turn.player_id) > 0)
+                    .filter(|(_, _, area)| area.corrupted_count(player_turn.player_id) > 0)
                     .count();
                 if corrupted_count > 0 {
                     tooltip.value = Some(format!(
@@ -440,17 +443,12 @@ fn corrupted_tooltip(
                 }
                 if corrupted_count > 0 && input.just_pressed(MouseButton::Left) {
                     *corrupted_idx += 1;
-                    for (mut tile, _) in tile_query.iter_mut() {
-                        tile.focused = false;
-                        tile.selected = false;
-                    }
-                    if let Some((mut tile, _)) = tile_query
+                    if let Some((tile_entity, mut tile, _)) = tile_query
                         .iter_mut()
-                        .filter(|(_, area)| area.corrupted_count(player_turn.player_id) > 0)
+                        .filter(|(_, _, area)| area.corrupted_count(player_turn.player_id) > 0)
                         .nth(*corrupted_idx % corrupted_count)
                     {
-                        tile.focused = true;
-                        tile.selected = true;
+                        tile_input.selected = Some((tile_entity, tile.x, tile.y));
                     }
                 }
             } else if *tooltip_control {

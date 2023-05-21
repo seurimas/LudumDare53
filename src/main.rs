@@ -3,6 +3,8 @@ mod game;
 mod menu;
 mod prelude;
 mod state;
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy_mod_picking::prelude::*;
 use game::GamePlugins;
 use menu::MenuPlugin;
 
@@ -25,22 +27,21 @@ fn main() {
             ..default()
         }))
         .add_plugins(GamePlugins)
+        .add_plugins(DefaultPickingPlugins)
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .add_plugin(LogDiagnosticsPlugin::default())
+        .add_plugin(bevy::diagnostic::EntityCountDiagnosticsPlugin::default())
         .add_plugin(MenuPlugin)
         .add_plugin(assets::GameAssetsPlugin)
-        .add_system(spawn_camera.in_schedule(OnEnter(GameState::Playing)))
         .add_system(despawn_camera.in_schedule(OnEnter(GameState::Playing)))
+        .add_system(spawn_menu_camera.in_schedule(OnEnter(GameState::Loading)))
         .add_system(spawn_menu_camera.in_schedule(OnEnter(GameState::MainMenu)))
         .add_system(despawn_menu_camera.in_schedule(OnEnter(GameState::MainMenu)))
-        .add_system(move_camera.run_if(in_state(GameState::Playing)))
         .run();
 }
 
-fn spawn_camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
-}
-
 fn spawn_menu_camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((Camera2dBundle::default(), RaycastPickCamera::default()));
 }
 
 fn despawn_camera(mut commands: Commands, camera: Query<Entity, With<Camera>>) {
@@ -52,29 +53,5 @@ fn despawn_camera(mut commands: Commands, camera: Query<Entity, With<Camera>>) {
 fn despawn_menu_camera(mut commands: Commands, camera: Query<Entity, With<Camera>>) {
     for entity in camera.iter() {
         commands.entity(entity).despawn_recursive();
-    }
-}
-
-fn move_camera(
-    time: Res<Time>,
-    mut camera: Query<(&mut Transform, &Camera)>,
-    input: Res<Input<KeyCode>>,
-) {
-    let (mut transform, _camera) = camera.single_mut();
-    let mut direction = Vec3::ZERO;
-    if input.pressed(KeyCode::W) {
-        direction += Vec3::Y;
-    }
-    if input.pressed(KeyCode::S) {
-        direction -= Vec3::Y;
-    }
-    if input.pressed(KeyCode::A) {
-        direction -= Vec3::X;
-    }
-    if input.pressed(KeyCode::D) {
-        direction += Vec3::X;
-    }
-    if direction != Vec3::ZERO {
-        transform.translation += direction.normalize() * 500. * time.delta_seconds();
     }
 }
