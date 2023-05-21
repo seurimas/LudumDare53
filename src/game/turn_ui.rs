@@ -533,7 +533,7 @@ fn add_turn_report_ui(mut commands: Commands, assets: Res<MyAssets>) {
                 ..default()
             },
             TurnReportUi,
-            RelativeCursorPosition::default(),
+            // RelativeCursorPosition::default(),
         ))
         .with_children(|parent| {
             // Turn report window.

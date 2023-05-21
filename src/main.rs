@@ -1,12 +1,14 @@
 mod assets;
 mod game;
 mod menu;
+mod monkey;
 mod prelude;
 mod state;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy_mod_picking::prelude::*;
 use game::GamePlugins;
 use menu::MenuPlugin;
+use monkey::BevyUiBackend;
 
 #[macro_use]
 extern crate lazy_static;
@@ -28,13 +30,14 @@ fn main() {
         }))
         .add_plugins(GamePlugins)
         .add_plugins(DefaultPickingPlugins)
+        .add_plugin(BevyUiBackend)
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::EntityCountDiagnosticsPlugin::default())
         .add_plugin(MenuPlugin)
         .add_plugin(assets::GameAssetsPlugin)
         .add_system(despawn_camera.in_schedule(OnEnter(GameState::Playing)))
-        .add_system(spawn_menu_camera.in_schedule(OnEnter(GameState::Loading)))
+        .add_startup_system(spawn_menu_camera)
         .add_system(spawn_menu_camera.in_schedule(OnEnter(GameState::MainMenu)))
         .add_system(despawn_menu_camera.in_schedule(OnEnter(GameState::MainMenu)))
         .run();

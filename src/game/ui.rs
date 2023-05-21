@@ -86,7 +86,7 @@ fn spawn_stat_ui(parent: &mut ChildBuilder, font: Handle<Font>, fancy_font: Hand
                 },
                 ..default()
             },
-            RelativeCursorPosition::default(),
+            // RelativeCursorPosition::default(),
         ))
         .with_children(|parent| {
             spawn_stat_block(

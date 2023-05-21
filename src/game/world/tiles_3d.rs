@@ -1,7 +1,5 @@
 use std::f32::consts::PI;
 
-use bevy::ui::RelativeCursorPosition;
-
 use crate::prelude::*;
 
 pub type TileLoc = i32;
@@ -101,7 +99,6 @@ fn load_map(
     map: Res<MapDesc>,
     assets: Res<MyAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut camera: Query<&mut Transform, With<Camera>>,
 ) {
     for mut transform in camera.iter_mut() {
@@ -111,18 +108,9 @@ fn load_map(
             .looking_at(Vec3::new(offset_x, 0.0, offset_y), Vec3::Y);
     }
     let pick_mesh = meshes.add(Mesh::from(shape::Box::new(2., 1., 2.)));
-    let pick_material = materials.add(Color::WHITE.into());
     for y in 0..map.height {
         for x in 0..map.width {
-            spawn_tile_3d(
-                x,
-                y,
-                &map,
-                &mut commands,
-                &assets,
-                pick_mesh.clone(),
-                pick_material.clone(),
-            );
+            spawn_tile_3d(x, y, &map, &mut commands, &assets, pick_mesh.clone());
         }
     }
     for y in -WATER_COUNT..(map.height as TileLoc + WATER_COUNT) {
@@ -219,27 +207,16 @@ fn spawn_tile_3d(
     commands: &mut Commands,
     assets: &Res<MyAssets>,
     pick_mesh: Handle<Mesh>,
-    pick_material: Handle<StandardMaterial>,
 ) {
     let sprite_id = map.get_tile(x, y);
     let mut tile = commands.spawn((
-        // SceneBundle {
-        //     // scene: assets.tiles[sprite_id as usize].clone(),
-        //     transform: Transform {
-        //         translation: Vec3::new(x as f32 * 2., 0., y as f32 * 2.),
-        //         // rotation: Quat::from_rotation_y(PI / 2. * (rand::random::<f32>() * 4.).round()),
-        //         ..Default::default()
-        //     },
-        //     ..Default::default()
-        // },
-        MaterialMeshBundle {
+        SceneBundle {
+            scene: assets.tiles[sprite_id as usize].clone(),
             transform: Transform {
                 translation: Vec3::new(x as f32 * 2., 0., y as f32 * 2.),
                 // rotation: Quat::from_rotation_y(PI / 2. * (rand::random::<f32>() * 4.).round()),
                 ..Default::default()
             },
-            mesh: pick_mesh,
-            material: pick_material,
             ..Default::default()
         },
         MapTile {
@@ -249,8 +226,7 @@ fn spawn_tile_3d(
             offset: -rand::random::<f32>() * MAP_WAVINESS,
             target: rand::random::<f32>() * MAP_WAVINESS,
         },
-        // pick_mesh,
-        // pick_material,
+        pick_mesh,
         PickableBundle::default(),
         RaycastPickTarget::default(),
         OnPointer::<Over>::run_callback(on_mouse_over_tile),

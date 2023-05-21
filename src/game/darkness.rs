@@ -425,7 +425,7 @@ fn add_evoking_ui(
                 ..default()
             },
             EvokingUi,
-            RelativeCursorPosition::default(),
+            // RelativeCursorPosition::default(),
         ))
         .with_children(|parent| {
             // Evoking UI
